@@ -1,0 +1,90 @@
+======================================================================
+  RAPPORT D'ÉVALUATION — Water Potability Prediction
+  Généré le : 2026-04-26 14:36:28
+  Random state : 42
+  CV strategy  : StratifiedKFold(n_splits=10, shuffle=True)
+  Métrique principale : GMEAN
+======================================================================
+
+  VALIDATION CROISÉE (Train set)
+----------------------------------------
+ Rang   Modèle  AUC moy.  AUC std  F1 moy.  F1 std  Acc moy.  Acc std
+    1 catboost   0.68485  0.02910  0.64224 0.03208   0.60611  0.03095
+    2     lgbm   0.68158  0.03020  0.66900 0.02856   0.62061  0.02977
+    3       rf   0.67290  0.03453  0.69450 0.02213   0.62290  0.02205
+    4       gb   0.65053  0.02847  0.70695 0.01645   0.61794  0.02052
+    5      xgb   0.64852  0.03710  0.70711 0.02770   0.61756  0.03142
+    6       et   0.55394  0.05086  0.64718 0.02132   0.55725  0.02309
+    7      svm   0.54448  0.03735  0.53894 0.04793   0.51183  0.03615
+    8   logreg   0.50443  0.02648  0.57491 0.03224   0.51908  0.02549
+
+  ÉVALUATION FINALE (Test set — données jamais vues)
+----------------------------------------
+Model Key  Composite Score  Roc Auc  Pr Auc     Mcc   Fbeta  Recall      F1  Accuracy  Threshold
+ catboost          0.59081  0.68980 0.78881 0.29225 0.90009  1.0000 0.78278   0.66159       0.25
+       rf          0.58711  0.67858 0.77873 0.29225 0.90009  1.0000 0.78278   0.66159       0.20
+     lgbm          0.58244  0.66879 0.77426 0.27852 0.89680  0.9950 0.78116   0.66006       0.37
+       gb          0.57184  0.64918 0.75588 0.19905 0.84413  0.9125 0.75884   0.64634       0.22
+      xgb          0.53854  0.63012 0.74206 0.12242 0.81708  0.8800 0.73795   0.61890       0.20
+
+  MEILLEURS HYPERPARAMÈTRES (Grid Search)
+----------------------------------------
+
+  [LOGREG] Logistic Regression
+    ROC-AUC CV : N/A
+    C                              = 1.0
+    penalty                        = l1
+
+  [SVM] Support Vector Machine
+    ROC-AUC CV : N/A
+    C                              = 10
+    gamma                          = auto
+    kernel                         = rbf
+
+  [RF] Random Forest
+    ROC-AUC CV : N/A
+    max_depth                      = 10
+    max_features                   = sqrt
+    min_samples_split              = 10
+    n_estimators                   = 400
+
+  [ET] Extra Trees
+    ROC-AUC CV : N/A
+    max_depth                      = 30
+    max_features                   = sqrt
+    min_samples_split              = 10
+    n_estimators                   = 400
+
+  [GB] Gradient Boosting
+    ROC-AUC CV : N/A
+    learning_rate                  = 0.2
+    max_depth                      = 7
+    n_estimators                   = 200
+    subsample                      = 1.0
+
+  [XGB] XGBoost
+    ROC-AUC CV : N/A
+    colsample_bytree               = 1.0
+    learning_rate                  = 0.2
+    max_depth                      = 7
+    n_estimators                   = 300
+    subsample                      = 1.0
+
+  [LGBM] LightGBM
+    ROC-AUC CV : N/A
+    learning_rate                  = 0.01
+    min_child_samples              = 50
+    n_estimators                   = 100
+    num_leaves                     = 31
+    reg_alpha                      = 1.0
+
+  [CATBOOST] CatBoost
+    ROC-AUC CV : N/A
+    depth                          = 4
+    iterations                     = 200
+    l2_leaf_reg                    = 3
+    learning_rate                  = 0.01
+
+======================================================================
+  Figures   : outputs\figures\evaluation
+======================================================================

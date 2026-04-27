@@ -1,0 +1,97 @@
+{
+    "logreg": {
+        "label": "Logistic Regression",
+        "params": {
+            "C": 1.0,
+            "penalty": "l1"
+        },
+        "gmean_cv": 0.50502,
+        "fit_time_s": 7.1,
+        "threshold": 0.2
+    },
+    "svm": {
+        "label": "Support Vector Machine",
+        "params": {
+            "C": 10,
+            "gamma": "auto",
+            "kernel": "rbf"
+        },
+        "gmean_cv": 0.52127,
+        "fit_time_s": 167.8,
+        "threshold": 0.2
+    },
+    "rf": {
+        "label": "Random Forest",
+        "params": {
+            "max_depth": 10,
+            "max_features": "sqrt",
+            "min_samples_split": 10,
+            "n_estimators": 400
+        },
+        "gmean_cv": 0.59142,
+        "fit_time_s": 456.8,
+        "threshold": 0.2
+    },
+    "et": {
+        "label": "Extra Trees",
+        "params": {
+            "max_depth": 30,
+            "max_features": "sqrt",
+            "min_samples_split": 10,
+            "n_estimators": 400
+        },
+        "gmean_cv": 0.50725,
+        "fit_time_s": 212.0,
+        "threshold": 0.2700000000000001
+    },
+    "gb": {
+        "label": "Gradient Boosting",
+        "params": {
+            "learning_rate": 0.2,
+            "max_depth": 7,
+            "n_estimators": 200,
+            "subsample": 1.0
+        },
+        "gmean_cv": 0.56795,
+        "fit_time_s": 368.0,
+        "threshold": 0.22000000000000003
+    },
+    "xgb": {
+        "label": "XGBoost",
+        "params": {
+            "colsample_bytree": 1.0,
+            "learning_rate": 0.2,
+            "max_depth": 7,
+            "n_estimators": 300,
+            "subsample": 1.0
+        },
+        "gmean_cv": 0.56917,
+        "fit_time_s": 153.1,
+        "threshold": 0.2
+    },
+    "lgbm": {
+        "label": "LightGBM",
+        "params": {
+            "learning_rate": 0.01,
+            "min_child_samples": 50,
+            "n_estimators": 100,
+            "num_leaves": 31,
+            "reg_alpha": 1.0
+        },
+        "gmean_cv": 0.61761,
+        "fit_time_s": 996.2,
+        "threshold": 0.37000000000000016
+    },
+    "catboost": {
+        "label": "CatBoost",
+        "params": {
+            "depth": 4,
+            "iterations": 200,
+            "l2_leaf_reg": 3,
+            "learning_rate": 0.01
+        },
+        "gmean_cv": 0.61818,
+        "fit_time_s": 1733.9,
+        "threshold": 0.25000000000000006
+    }
+}
