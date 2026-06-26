@@ -20,7 +20,7 @@ Usage
 from pathlib import Path
 import numpy as np
 from sklearn.metrics import fbeta_score, make_scorer, recall_score
-
+from typing import Tuple, Optional
 # ===========================================================================
 # REPRODUCTIBILITÉ
 # ===========================================================================
@@ -287,6 +287,15 @@ MODEL_SELECTION = {
     # Préfixe des fichiers modèle
     "model_prefix": "model_",
 }
+
+PHYSICAL_BOUNDS: dict[str, Tuple[float, float]] = {
+    "ph":           (0.0,  14.0),
+    "Solids":       (0.0,  10000.0),   
+    "Conductivity": (0.0,  15000.0),   
+    "Turbidity":    (0.0,  1000.0),      
+}
+
+TDS_EC_FACTOR=0.67
 
 # ===========================================================================
 # PARAMÈTRES D'AFFICHAGE DES FIGURES

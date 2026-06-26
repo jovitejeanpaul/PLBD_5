@@ -52,13 +52,12 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Imports projet (tous dans src/, imports directs)
 # ---------------------------------------------------------------------------
-from config import FEATURES, PATHS
-from data_processing import PHYSICAL_BOUNDS, TDS_EC_FACTOR
+from config import FEATURES, PATHS, PHYSICAL_BOUNDS, TDS_EC_FACTOR
 
 # ThresholdClassifier doit être importé au niveau MODULE (pas dans une fonction)
 # pour que pickle puisse le retrouver dans __main__ lors du joblib.load().
-from train_model import ThresholdClassifier  # noqa: F401
 
+from train_model import ThresholdClassifier  # noqa: F401
 
 # ===========================================================================
 # CONVERSIONS CAPTEURS → UNITÉS MODÈLE
@@ -137,8 +136,8 @@ class ADS1115Reader:
 class MockSensorReader:
     """Simulateur de capteurs pour développement sur PC."""
 
-    _MEANS = {"ph": 7.2, "Solids": 18500.0, "Conductivity": 420.0, "Turbidity": 3.8}
-    _STD   = {"ph": 0.3, "Solids": 800.0,   "Conductivity": 20.0,  "Turbidity": 0.5}
+    _MEANS = {"ph": 7.2, "Solids": 1000.0, "Conductivity": 1500.0, "Turbidity": 3.8}
+    _STD   = {"ph": 5.0, "Solids": 800.0,   "Conductivity": 1000.0,  "Turbidity": 2.0}
 
     def __init__(self, random_state: int | None = None):
         self._rng = np.random.default_rng(random_state)
@@ -216,7 +215,8 @@ class SensorPipeline:
         scaler = joblib.load(d / "scaler.joblib")
 
         # Lire le seuil intégré dans le ThresholdClassifier
-        threshold = getattr(model, "threshold", 0.5)
+    
+        threshold =getattr(model, "threshold", 0.5)
         logger.info(
             "Modèle chargé : %s | seuil=%.3f",
             candidates[0].name, threshold,
