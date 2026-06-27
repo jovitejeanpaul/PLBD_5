@@ -11,7 +11,15 @@ Flux
         ├── A1 → pH        → ph [0–14]
         └── A3 → Turbidité → Turbidity [NTU]
 
+    DS18B20 (1-Wire, GPIO 4)
+        └── Temperature [°C]  → utilisée par le modèle de prédiction uniquement
+
     Conductivité = Solids / TDS_EC_FACTOR  (dérivée du TDS)
+
+Rôle de chaque mesure
+----------------------
+    Diagnostic potabilité : ph, Solids, Conductivity, Turbidity
+    Prédiction 24h        : ph, Solids, Conductivity, Turbidity, Temperature
 
 Mode mock
 ----------
@@ -25,8 +33,8 @@ Usage
 
 from __future__ import annotations
 
-import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -61,7 +69,6 @@ from threshold_classifier import ThresholdClassifier  # noqa: F401
 try:
     from config import FEATURES, PATHS, PHYSICAL_BOUNDS, TDS_EC_FACTOR
 except ImportError:
-    from pathlib import Path
     logger.warning("config.py indisponible — utilisation des constantes embarquées.")
     FEATURES = ["ph", "Solids", "Conductivity", "Turbidity"]
     PATHS = {"models": Path("outputs/models")}
@@ -70,15 +77,74 @@ except ImportError:
         "Solids":       (0.0,  10000.0),
         "Conductivity": (0.0,  15000.0),
         "Turbidity":    (0.0,  1000.0),
+        "Temperature":  (-10.0, 100.0),
     }
     TDS_EC_FACTOR = 0.67
+
+# Nombre d'échantillons pour la moyenne — harmonisé à 50 pour tous les capteurs
+N_SAMPLES = 50
+
+# ===========================================================================
+# CAPTEUR DS18B20 — TEMPÉRATURE (1-Wire, GPIO 4)
+# ===========================================================================
+
+def _init_ds18b20() -> str | None:
+    """
+    Active les modules 1-Wire et retourne le chemin du fichier capteur.
+    Retourne None si aucun DS18B20 n'est détecté (mode PC/mock).
+    """
+    os.system("modprobe w1-gpio")
+    os.system("modprobe w1-therm")
+    base_dir = "/sys/bus/w1/devices/"
+    try:
+        folders = [d for d in os.listdir(base_dir) if d.startswith("28-")]
+        device_file = base_dir + folders[0] + "/w1_slave"
+        logger.info("DS18B20 détecté : %s", device_file)
+        return device_file
+    except (IndexError, FileNotFoundError):
+        logger.warning("DS18B20 absent — température simulée en mode mock.")
+        return None
+
+
+_DS18B20_FILE: str | None = _init_ds18b20() if _HW_AVAILABLE else None
+
+
+def read_temperature_once(device_file: str) -> float:
+    """
+    Lit une mesure de température depuis le fichier 1-Wire du DS18B20.
+    Attend la confirmation 'YES' avant de décoder la valeur.
+    """
+    def _raw_lines() -> list[str]:
+        with open(device_file, "r") as f:
+            return f.readlines()
+
+    lines = _raw_lines()
+    while lines[0].strip()[-3:] != "YES":
+        time.sleep(0.2)
+        lines = _raw_lines()
+
+    equals_pos = lines[1].find("t=")
+    if equals_pos == -1:
+        raise ValueError("Format inattendu du fichier DS18B20.")
+    return float(lines[1][equals_pos + 2:]) / 1000.0
+
+
+def read_temperature_mean(device_file: str, n: int = N_SAMPLES) -> float:
+    """
+    Moyenne de n lectures DS18B20 pour réduire le bruit.
+    Le DS18B20 a une résolution de 0.0625°C — 50 lectures donnent
+    une stabilité suffisante pour le modèle de prédiction.
+    """
+    readings = [read_temperature_once(device_file) for _ in range(n)]
+    return round(float(np.mean(readings)), 3)
+
 
 # ===========================================================================
 # CONVERSIONS CAPTEURS → UNITÉS MODÈLE
 # ===========================================================================
 
 def voltage_to_tds(v: float) -> float:
-    """Tension A0 → TDS en mg/L. Source : tds.py
+    """Tension A0 → TDS en mg/L.
         TDS = (133.42·V³ − 255.86·V² + 857.39·V) × 0.5
     """
     tds = (133.42 * v**3 - 255.86 * v**2 + 857.39 * v) * 0.5
@@ -86,23 +152,29 @@ def voltage_to_tds(v: float) -> float:
 
 
 def voltage_to_ph(v: float) -> float:
-    """Tension A1 → pH [0–14]. Source : ph.py
+    """Tension A1 → pH [0–14].
         pH = 3.5 × V
     """
     return float(np.clip(3.5 * v, 0.0, 14.0))
 
 
 def voltage_to_turbidity(v: float) -> float:
-    """Tension A3 → Turbidité en NTU. Source : script turbidité.
-        V ≥ 4.05  →  0 NTU
-        V < 2.5   →  3000 NTU
-        sinon     →  (4.095 − V) × 1935
+    """Tension A3 → Turbidité en NTU. Capteur TSW-20M.
+
+    Polynôme quadratique calibré sur 3 points réels mesurés :
+        4.196 V → 0.1  NTU  (eau minérale)
+        3.764 V → 1.5  NTU  (eau du robinet)
+        3.213 V → 100  NTU  (eau troublée)
+
+    Relation inversée : tension basse = eau trouble.
+    Domaine valide : V ∈ [2.5, 4.196]
     """
-    if v >= 4.05:
+    if v >= 4.196:
         return 0.0
     if v < 2.5:
-        return 3000.0
-    return float(max(0.0, (4.095 - v) * 1935.0))
+        return 4550.0
+    ntu = 178.5607 * v**2 - 1424.5837 * v + 2833.8397
+    return round(float(max(0.0, ntu)), 2)
 
 
 def tds_to_conductivity(tds_mg_l: float) -> float:
@@ -115,18 +187,26 @@ def tds_to_conductivity(tds_mg_l: float) -> float:
 # ===========================================================================
 
 class ADS1115Reader:
-    """Lecture réelle via ADS1115 (I2C). Canaux : A0=TDS · A1=pH · A3=Turbidité"""
+    """
+    Lecture réelle via ADS1115 (I2C) + DS18B20 (1-Wire).
 
-    def __init__(self, gain: int = 1, n_samples: int = 5):
+    Canaux ADS1115 : A0=TDS · A1=pH · A3=Turbidité
+    Capteur 1-Wire : DS18B20 → Temperature
+    """
+
+    def __init__(self, gain: int = 1, n_samples: int = N_SAMPLES):
         if not _HW_AVAILABLE:
             raise RuntimeError("Bibliothèques Adafruit absentes.")
         i2c = busio.I2C(board.SCL, board.SDA)
         self._ads = _ADS.ADS1115(i2c)
         self._ads.gain = gain
-        self._n = n_samples
-        self._ch_tds  = AnalogIn(self._ads, 0)   # A0 → TDS
-        self._ch_ph   = AnalogIn(self._ads, 1)   # A1 → pH
-        self._ch_turb = AnalogIn(self._ads, 3)   # A3 → Turbidité
+        self._n       = n_samples
+        self._ch_tds  = AnalogIn(self._ads, 0)
+        self._ch_ph   = AnalogIn(self._ads, 1)
+        self._ch_turb = AnalogIn(self._ads, 3)
+
+        if _DS18B20_FILE is None:
+            raise RuntimeError("DS18B20 non détecté. Vérifiez le câblage sur GPIO 4.")
 
     def _mean_voltage(self, channel) -> float:
         readings = [channel.voltage for _ in range(self._n)]
@@ -134,31 +214,40 @@ class ADS1115Reader:
         return float(np.mean(readings))
 
     def read_features(self) -> dict[str, float]:
-        """Retourne les 4 features dans les unités du modèle."""
+        """Retourne les 5 mesures : 4 features diagnostic + température prédiction."""
         v_tds  = self._mean_voltage(self._ch_tds)
         v_ph   = self._mean_voltage(self._ch_ph)
         v_turb = self._mean_voltage(self._ch_turb)
-        tds = voltage_to_tds(v_tds)
+        tds    = voltage_to_tds(v_tds)
+        temp   = read_temperature_mean(_DS18B20_FILE, self._n)
         return {
             "ph":           voltage_to_ph(v_ph),
             "Solids":       tds,
             "Conductivity": tds_to_conductivity(tds),
             "Turbidity":    voltage_to_turbidity(v_turb),
+            "Temperature":  temp,
         }
 
 
 class MockSensorReader:
     """Simulateur de capteurs pour développement sur PC."""
 
-    _MEANS = {"ph": 7.2, "Solids": 1000.0, "Conductivity": 1500.0, "Turbidity": 3.8}
-    _STD   = {"ph": 5.0, "Solids": 800.0,   "Conductivity": 1000.0,  "Turbidity": 2.0}
+    _MEANS = {
+        "ph": 7.2, "Solids": 1000.0, "Conductivity": 1500.0,
+        "Turbidity": 1.5, "Temperature": 22.0,
+    }
+    _STD = {
+        "ph": 0.5, "Solids": 200.0, "Conductivity": 300.0,
+        "Turbidity": 0.5, "Temperature": 1.0,
+    }
 
     def __init__(self, random_state: int | None = None):
         self._rng = np.random.default_rng(random_state)
 
     def read_features(self) -> dict[str, float]:
+        all_features = FEATURES + ["Temperature"]
         values = {}
-        for feat in FEATURES:
+        for feat in all_features:
             raw = self._rng.normal(self._MEANS[feat], self._STD[feat])
             lo, hi = PHYSICAL_BOUNDS[feat]
             values[feat] = round(float(np.clip(raw, lo, hi)), 4)
@@ -189,9 +278,8 @@ class SensorPipeline:
     sensor_reader :
         ADS1115Reader ou MockSensorReader.
     threshold : float
-        Seuil de décision. Chargé automatiquement depuis best_params.json.
-        Présent pour surcharge manuelle uniquement — le ThresholdClassifier
-        contient déjà le seuil intégré.
+        Seuil de décision. Présent pour surcharge manuelle uniquement —
+        le ThresholdClassifier contient déjà le seuil intégré.
     """
 
     def __init__(self, model, scaler, sensor_reader=None, threshold: float = 0.5):
@@ -228,9 +316,7 @@ class SensorPipeline:
         model  = joblib.load(candidates[0])
         scaler = joblib.load(d / "scaler.joblib")
 
-        # Lire le seuil intégré dans le ThresholdClassifier
-    
-        threshold =getattr(model, "threshold", 0.5)
+        threshold = getattr(model, "threshold", 0.5)
         logger.info(
             "Modèle chargé : %s | seuil=%.3f",
             candidates[0].name, threshold,
@@ -241,14 +327,14 @@ class SensorPipeline:
 
     def run_once(self) -> dict[str, Any]:
         """
-        Lit les capteurs et retourne le diagnostic immédiat.
+        Lit tous les capteurs et retourne le diagnostic immédiat.
 
         Returns
         -------
         dict
             timestamp         : str ISO-8601
-            raw_values        : dict {feature: float}
-            potability_now    : int  (0=Potable, 1=Non potable)
+            raw_values        : dict {feature: float}  — inclut Temperature
+            potability_now    : int   (0=Potable, 1=Non potable)
             potability_label  : str
             confidence_proba  : float
             out_of_bounds     : list[str]
@@ -256,20 +342,22 @@ class SensorPipeline:
         """
         import datetime
 
-        t0 = time.perf_counter()
-
+        t0  = time.perf_counter()
         raw = self.reader.read_features()
 
+        # Vérification des bornes sur toutes les mesures (y compris température)
+        all_bounds = {**PHYSICAL_BOUNDS}
         out_of_bounds = [
             f for f, v in raw.items()
-            if not (PHYSICAL_BOUNDS[f][0] <= v <= PHYSICAL_BOUNDS[f][1])
+            if f in all_bounds
+            and not (all_bounds[f][0] <= v <= all_bounds[f][1])
         ]
         if out_of_bounds:
             logger.warning("Valeurs hors bornes : %s", out_of_bounds)
 
+        # Inférence diagnostic — température exclue volontairement (réservée au modèle de prédiction)
         x        = np.array([[raw[f] for f in FEATURES]])
         x_scaled = self.scaler.transform(x)
-        # ThresholdClassifier.predict() applique déjà le seuil optimal
         pred     = int(self.model.predict(x_scaled)[0])
         proba    = float(self.model.predict_proba(x_scaled)[0][1])
         label    = "Non potable" if pred == 1 else "Potable"
@@ -287,10 +375,11 @@ class SensorPipeline:
         }
 
         logger.info(
-            "[%s] pH=%.2f | TDS=%.0f mg/L | Cond=%.1f µS/cm | Turb=%.2f NTU "
-            "→ %s (p=%.2f) | %.1f ms",
+            "[%s] pH=%.2f | TDS=%.0f mg/L | Cond=%.1f µS/cm | "
+            "Turb=%.2f NTU | Temp=%.1f °C → %s (p=%.2f) | %.1f ms",
             result["timestamp"],
-            raw["ph"], raw["Solids"], raw["Conductivity"], raw["Turbidity"],
+            raw["ph"], raw["Solids"], raw["Conductivity"],
+            raw["Turbidity"], raw["Temperature"],
             label, proba, elapsed_ms,
         )
         return result
@@ -346,6 +435,7 @@ if __name__ == "__main__":
         interval_s=3600.0,
         on_result=lambda r: print(
             f"[{r['timestamp']}] {r['potability_label']} "
-            f"(confiance={r['confidence_proba']:.2f})"
+            f"(confiance={r['confidence_proba']:.2f}) | "
+            f"Temp={r['raw_values']['Temperature']:.1f} °C"
         ),
     )

@@ -294,7 +294,8 @@ PHYSICAL_BOUNDS: dict[str, Tuple[float, float]] = {
     "ph":           (0.0,  14.0),
     "Solids":       (0.0,  10000.0),   
     "Conductivity": (0.0,  15000.0),   
-    "Turbidity":    (0.0,  1000.0),      
+    "Turbidity":    (0.0,  1000.0),   
+    "Temperature":  (-10.0,100.0)  
 }
 
 TDS_EC_FACTOR=0.67
