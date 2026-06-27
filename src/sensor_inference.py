@@ -77,12 +77,12 @@ except ImportError:
         "Solids":       (0.0,  10000.0),
         "Conductivity": (0.0,  15000.0),
         "Turbidity":    (0.0,  1000.0),
-        "Temperature":  (-10.0, 100.0),
+        "Temperature":  (-10.0, 85.0),
     }
     TDS_EC_FACTOR = 0.67
 
-# Nombre d'échantillons pour la moyenne — harmonisé à 5 pour tous les capteurs
-N_SAMPLES = 5
+# Nombre d'échantillons pour la moyenne — harmonisé à 50 pour tous les capteurs
+N_SAMPLES = 50
 
 # ===========================================================================
 # CAPTEUR DS18B20 — TEMPÉRATURE (1-Wire, GPIO 4)
@@ -143,19 +143,41 @@ def read_temperature_mean(device_file: str, n: int = N_SAMPLES) -> float:
 # CONVERSIONS CAPTEURS → UNITÉS MODÈLE
 # ===========================================================================
 
-def voltage_to_tds(v: float) -> float:
-    """Tension A0 → TDS en mg/L.
-        TDS = (133.42·V³ − 255.86·V² + 857.39·V) × 0.5
+def voltage_to_conductivity(v: float) -> float:
+    """Tension A0 → Conductivité en µS/cm. Capteur Gravity TDS Meter V1.0.
+
+    Le polynôme cubique donne directement la conductivité (EC) :
+        EC = 133.42·V³ − 255.86·V² + 857.39·V
+
+    Source : courbe de calibration DFRobot Gravity TDS Meter V1.0.
     """
-    tds = (133.42 * v**3 - 255.86 * v**2 + 857.39 * v) * 0.5
-    return max(0.0, tds)
+    ec = 133.42 * v**3 - 255.86 * v**2 + 857.39 * v
+    return max(0.0, ec)
 
 
-def voltage_to_ph(v: float) -> float:
-    """Tension A1 → pH [0–14].
-        pH = 3.5 × V
+def conductivity_to_tds(ec: float) -> float:
+    """Conductivité [µS/cm] → TDS [mg/L] via TDS_EC_FACTOR.
+        TDS = EC × TDS_EC_FACTOR  (0.67 par défaut)
     """
-    return float(np.clip(3.5 * v, 0.0, 14.0))
+    return ec * TDS_EC_FACTOR
+
+
+def voltage_to_ph(v: float, temperature: float = 25.0) -> float:
+    """Tension A1 → pH [0–14]. Capteur pH Meter V1.1.
+
+    Formule fabricant : pH = 3.5 × V + 0.5
+    Compensation thermique via DS18B20 : ±0.03 pH/°C par rapport à 25°C.
+
+    Parameters
+    ----------
+    v : float
+        Tension lue sur A1 [V].
+    temperature : float
+        Température de l'eau [°C], fournie par le DS18B20.
+    """
+    ph_raw = 3.5 * v + 0.5
+    ph_compensated = ph_raw + (temperature - 25.0) * 0.03
+    return float(np.clip(ph_compensated, 0.0, 14.0))
 
 
 def voltage_to_turbidity(v: float) -> float:
@@ -177,9 +199,7 @@ def voltage_to_turbidity(v: float) -> float:
     return round(float(max(0.0, ntu)), 2)
 
 
-def tds_to_conductivity(tds_mg_l: float) -> float:
-    """TDS [mg/L] → Conductivité [µS/cm] via TDS_EC_FACTOR."""
-    return tds_mg_l / TDS_EC_FACTOR
+
 
 
 # ===========================================================================
@@ -218,12 +238,12 @@ class ADS1115Reader:
         v_tds  = self._mean_voltage(self._ch_tds)
         v_ph   = self._mean_voltage(self._ch_ph)
         v_turb = self._mean_voltage(self._ch_turb)
-        tds    = voltage_to_tds(v_tds)
         temp   = read_temperature_mean(_DS18B20_FILE, self._n)
+        ec     = voltage_to_conductivity(v_tds)
         return {
-            "ph":           voltage_to_ph(v_ph),
-            "Solids":       tds,
-            "Conductivity": tds_to_conductivity(tds),
+            "ph":           voltage_to_ph(v_ph, temperature=temp),
+            "Solids":       conductivity_to_tds(ec),
+            "Conductivity": ec,
             "Turbidity":    voltage_to_turbidity(v_turb),
             "Temperature":  temp,
         }
