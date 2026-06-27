@@ -49,7 +49,7 @@ from sensor_inference import (
     voltage_to_tds,
     voltage_to_turbidity,
 )
-from train_model import ThresholdClassifier
+from threshold_classifier import ThresholdClassifier
 from config import FEATURES, PATHS
 from data_processing import PHYSICAL_BOUNDS, TDS_EC_FACTOR
 

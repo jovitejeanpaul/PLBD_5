@@ -82,7 +82,7 @@ if diag_model_path and diag_scaler_path and diag_scaler_path.exists():
     try:
         import sys
         sys.path.insert(0, str(BASE.parent / "src"))
-        from train_model import ThresholdClassifier  # noqa: F401
+        from threshold_classifier import ThresholdClassifier  # noqa: F401
 
         diag_model  = joblib.load(diag_model_path)
         diag_scaler = joblib.load(diag_scaler_path)

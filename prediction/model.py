@@ -10,6 +10,8 @@ Features (5 capteurs, noms alignés avec le module de diagnostic) :
     ph · Solids · Conductivity · Turbidity · temperature
 """
 
+from __future__ import annotations
+
 import torch.nn as nn
 
 # ── Constantes partagées ────────────────────────────────────────────────────

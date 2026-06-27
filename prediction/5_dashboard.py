@@ -17,6 +17,8 @@ Usage
     python prediction/5_dashboard.py
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 import sys
 import tkinter as tk
@@ -81,7 +83,7 @@ def _load_diagnostic():
     scaler_path = OUTPUTS_DIR / "scaler.joblib" if OUTPUTS_DIR.exists() else None
     if path and scaler_path and scaler_path.exists():
         try:
-            from src.train_model import ThresholdClassifier  # noqa: F401
+            from src.threshold_classifier import ThresholdClassifier  # noqa: F401
             return joblib.load(path), joblib.load(scaler_path)
         except Exception:
             pass

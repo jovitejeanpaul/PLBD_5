@@ -50,14 +50,28 @@ except ImportError:
     logger.warning("Bibliothèques Adafruit absentes — mode MOCK activé.")
 
 # ---------------------------------------------------------------------------
-# Imports projet (tous dans src/, imports directs)
+# Imports projet — légers, sans dépendances d'entraînement
 # ---------------------------------------------------------------------------
-from config import FEATURES, PATHS, PHYSICAL_BOUNDS, TDS_EC_FACTOR
 
 # ThresholdClassifier doit être importé au niveau MODULE (pas dans une fonction)
 # pour que pickle puisse le retrouver dans __main__ lors du joblib.load().
+from threshold_classifier import ThresholdClassifier  # noqa: F401
 
-from train_model import ThresholdClassifier  # noqa: F401
+# Constantes Pi-compatibles : on tente config.py (complet), sinon valeurs locales
+try:
+    from config import FEATURES, PATHS, PHYSICAL_BOUNDS, TDS_EC_FACTOR
+except ImportError:
+    from pathlib import Path
+    logger.warning("config.py indisponible — utilisation des constantes embarquées.")
+    FEATURES = ["ph", "Solids", "Conductivity", "Turbidity"]
+    PATHS = {"models": Path("outputs/models")}
+    PHYSICAL_BOUNDS = {
+        "ph":           (0.0,  14.0),
+        "Solids":       (0.0,  10000.0),
+        "Conductivity": (0.0,  15000.0),
+        "Turbidity":    (0.0,  1000.0),
+    }
+    TDS_EC_FACTOR = 0.67
 
 # ===========================================================================
 # CONVERSIONS CAPTEURS → UNITÉS MODÈLE

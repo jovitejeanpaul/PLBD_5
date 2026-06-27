@@ -38,6 +38,8 @@ Dépendances
     pip install scikit-learn xgboost lightgbm catboost joblib matplotlib seaborn
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import logging
@@ -101,99 +103,7 @@ logger = logging.getLogger(__name__)
 # 0. WRAPPER — MODÈLE AVEC SEUIL INTÉGRÉ
 # ===========================================================================
 
-class ThresholdClassifier:
-    """
-    Wrapper sklearn qui encapsule un estimateur et son seuil de décision optimal.
-
-    Problème résolu
-    ---------------
-    Sans ce wrapper, le seuil optimal trouvé par tuning est stocké séparément
-    du modèle. Lors du rechargement en production (joblib.load), le seuil est
-    perdu et predict() utilise 0.5 par défaut — incohérence avec les métriques
-    calculées à l'entraînement.
-
-    Avec ce wrapper, le modèle ET son seuil forment un seul objet sérialisable.
-    Un simple ``joblib.load("model_1_rf.joblib").predict(X)`` utilise
-    automatiquement le bon seuil.
-
-    Compatibilité sklearn
-    ---------------------
-    Implémente predict(), predict_proba(), fit() et les attributs standards
-    (classes_, feature_importances_, coef_) pour être compatible avec le reste
-    du pipeline sklearn (cross_validate, GridSearchCV, etc.).
-
-    Parameters
-    ----------
-    estimator : sklearn estimator
-        Modèle de base (doit exposer predict_proba).
-    threshold : float
-        Seuil de décision optimal dans [0, 1]. Par défaut 0.5.
-
-    Examples
-    --------
-    >>> clf = ThresholdClassifier(RandomForestClassifier(), threshold=0.32)
-    >>> clf.fit(X_train, y_train)
-    >>> clf.predict(X_test)          # utilise seuil=0.32 automatiquement
-    >>> clf.predict_proba(X_test)    # probabilités brutes inchangées
-    >>> joblib.dump(clf, "model.joblib")
-    >>> clf2 = joblib.load("model.joblib")
-    >>> clf2.threshold               # 0.32 — seuil conservé après rechargement
-    """
-
-    def __init__(self, estimator: Any, threshold: float = 0.5) -> None:
-        self.estimator = estimator
-        self.threshold = threshold
-
-    def fit(self, X, y, **fit_params):
-        """Entraîne l'estimateur interne."""
-        self.estimator.fit(X, y, **fit_params)
-        self.classes_ = self.estimator.classes_
-        return self
-
-    def predict_proba(self, X) -> np.ndarray:
-        """Retourne les probabilités brutes de l'estimateur interne."""
-        return self.estimator.predict_proba(X)
-
-    def predict(self, X) -> np.ndarray:
-        """
-        Prédit les classes en appliquant le seuil optimal.
-
-        Classe 1 (Non potable) si proba[:,1] >= threshold, sinon 0 (Potable).
-        """
-        y_proba = self.predict_proba(X)[:, 1]
-        return (y_proba >= self.threshold).astype(int)
-
-    def set_params(self, **params):
-        """Permet l'utilisation dans GridSearchCV."""
-        for k, v in params.items():
-            if k == "threshold":
-                self.threshold = v
-            else:
-                self.estimator.set_params(**{k: v})
-        return self
-
-    def get_params(self, deep: bool = True) -> dict:
-        """Retourne les paramètres pour la compatibilité sklearn."""
-        params = {"estimator": self.estimator, "threshold": self.threshold}
-        if deep and hasattr(self.estimator, "get_params"):
-            for k, v in self.estimator.get_params(deep=True).items():
-                params[f"estimator__{k}"] = v
-        return params
-
-    @property
-    def feature_importances_(self):
-        """Délègue feature_importances_ à l'estimateur interne si disponible."""
-        return getattr(self.estimator, "feature_importances_", None)
-
-    @property
-    def coef_(self):
-        """Délègue coef_ à l'estimateur interne si disponible."""
-        return getattr(self.estimator, "coef_", None)
-
-    def __repr__(self) -> str:
-        return (f"ThresholdClassifier("
-                f"estimator={self.estimator.__class__.__name__}, "
-                f"threshold={self.threshold:.3f})")
+from threshold_classifier import ThresholdClassifier  # noqa: E402
 
 
 # ===========================================================================

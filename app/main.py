@@ -82,7 +82,7 @@ lstm_model   = None
 lstm_scaler  = None
 
 try:
-    from src.train_model      import ThresholdClassifier  # noqa: F401 — nécessaire pour joblib
+    from src.threshold_classifier import ThresholdClassifier  # noqa: F401 — nécessaire pour joblib
     from src.sensor_inference import SensorPipeline
     pipeline = SensorPipeline.from_saved_models(
         models_dir=ROOT / "outputs" / "models",

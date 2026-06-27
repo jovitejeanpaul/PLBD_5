@@ -42,6 +42,8 @@ Dépendances
     pip install scikit-learn xgboost lightgbm catboost joblib matplotlib seaborn
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import logging
