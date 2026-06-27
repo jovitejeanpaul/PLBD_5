@@ -81,8 +81,8 @@ except ImportError:
     }
     TDS_EC_FACTOR = 0.67
 
-# Nombre d'échantillons pour la moyenne — harmonisé à 50 pour tous les capteurs
-N_SAMPLES = 50
+# Nombre d'échantillons pour la moyenne — harmonisé à 5 pour tous les capteurs
+N_SAMPLES = 5
 
 # ===========================================================================
 # CAPTEUR DS18B20 — TEMPÉRATURE (1-Wire, GPIO 4)
