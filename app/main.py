@@ -86,7 +86,7 @@ try:
     from src.sensor_inference import SensorPipeline
     pipeline = SensorPipeline.from_saved_models(
         models_dir=ROOT / "outputs" / "models",
-        mock=True,  # passe en False quand les capteurs sont branchés
+        mock=False,  # passe en False quand les capteurs sont branchés
     )
     _STATUS["diagnostic_model"] = True
     _STATUS["mock_mode"] = not pipeline.reader.__class__.__name__ == "ADS1115Reader"
