@@ -1,6 +1,6 @@
 ======================================================================
   RAPPORT D'ÉVALUATION — Water Potability Prediction
-  Généré le : 2026-06-19 13:31:45
+  Généré le : 2026-06-27 11:34:23
   Random state : 42
   CV strategy  : StratifiedKFold(n_splits=10, shuffle=True)
   Métrique principale : GMEAN

@@ -1,0 +1,19 @@
+{
+  "model_key": "catboost",
+  "model_rank": 1,
+  "explainer_type": "TreeExplainer",
+  "n_samples": 656,
+  "fit_time_s": 15.975,
+  "feature_ranking": [
+    "ph",
+    "Conductivity",
+    "Turbidity",
+    "Solids"
+  ],
+  "mean_abs_shap": {
+    "ph": 0.528065,
+    "Conductivity": 0.113864,
+    "Turbidity": 0.083626,
+    "Solids": 7.7e-05
+  }
+}
