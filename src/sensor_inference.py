@@ -81,8 +81,8 @@ except ImportError:
     }
     TDS_EC_FACTOR = 0.67
 
-# Nombre d'échantillons pour la moyenne — harmonisé à 10 pour tous les capteurs
-N_SAMPLES = 10
+# Nombre d'échantillons pour la moyenne — harmonisé à 5 pour tous les capteurs
+N_SAMPLES = 5
 
 # ===========================================================================
 # CAPTEUR DS18B20 — TEMPÉRATURE (1-Wire, GPIO 4)
@@ -336,7 +336,7 @@ class SensorPipeline:
         model  = joblib.load(candidates[0])
         scaler = joblib.load(d / "scaler.joblib")
 
-        threshold = getattr(model, "threshold", 0.5)
+        threshold = 0.5
         logger.info(
             "Modèle chargé : %s | seuil=%.3f",
             candidates[0].name, threshold,
@@ -378,8 +378,8 @@ class SensorPipeline:
         # Inférence diagnostic — température exclue volontairement (réservée au modèle de prédiction)
         x        = np.array([[raw[f] for f in FEATURES]])
         x_scaled = self.scaler.transform(x)
-        pred     = int(self.model.predict(x_scaled)[0])
         proba    = float(self.model.predict_proba(x_scaled)[0][1])
+        pred     = int(proba >= self.threshold)  # seuil 0.5 appliqué manuellement
         label    = "Non potable" if pred == 1 else "Potable"
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
