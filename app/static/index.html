@@ -1469,11 +1469,11 @@ function renderShap(d) {
   const list  = document.getElementById('shapList');
   const feats = d.feature_ranking || [];
   const vals  = d.mean_abs_shap   || {};
-  const maxV  = Math.max(...Object.values(vals), 1e-9);
+  const totalV = Object.values(vals).reduce((a, b) => a + b, 1e-9);
 
   list.innerHTML = feats.map(f => {
     const v   = vals[f] || 0;
-    const pct = ((v / maxV) * 100).toFixed(1);
+    const pct = ((v / totalV) * 100).toFixed(1);
     return `<li class="shap-item">
       <span class="shap-feat">${FEAT_LABELS[f] || f}</span>
       <div class="shap-bar-bg"><div class="shap-bar-fill" style="width:${pct}%"></div></div>
