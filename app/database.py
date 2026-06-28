@@ -76,6 +76,14 @@ def initialize_database():
         )
     """)
 
+    # ── Table configuration ────────────────────────────────────────────
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS config(
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+
     # Admin par défaut
     cursor.execute("SELECT id FROM users WHERE username=?", ("admin",))
     if cursor.fetchone() is None:
@@ -251,3 +259,32 @@ def get_history_forecast(limit: int = 50) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ══════════════════════════════════════════════════════════════════════
+# CONFIGURATION PERSISTANTE
+# ══════════════════════════════════════════════════════════════════════
+
+def get_config(key: str, default: str = "") -> str:
+    conn = get_connection()
+    row = conn.execute("SELECT value FROM config WHERE key=?", (key,)).fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+
+def set_config(key: str, value: str) -> None:
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO config(key, value) VALUES(?,?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (key, value),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_all_config() -> dict:
+    conn = get_connection()
+    rows = conn.execute("SELECT key, value FROM config").fetchall()
+    conn.close()
+    return {r["key"]: r["value"] for r in rows}

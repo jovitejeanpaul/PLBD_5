@@ -248,7 +248,7 @@ class TestRunOnce:
         assert set(pipeline.run_once().keys()) == {
             "timestamp", "raw_values", "potability_now",
             "potability_label", "confidence_proba", "threshold",
-            "out_of_bounds", "inference_time_ms",
+            "out_of_bounds", "sensor_errors", "inference_time_ms",
         }
 
     def test_raw_values_contain_all_sensor_features(self, pipeline):

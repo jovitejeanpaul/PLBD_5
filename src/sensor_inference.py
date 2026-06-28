@@ -381,6 +381,18 @@ class SensorPipeline:
         if out_of_bounds:
             logger.warning("Valeurs hors bornes : %s", out_of_bounds)
 
+        # Détection capteur invalide (déconnecté ou saturé)
+        SATURATION_VALUES = {"Turbidity": 4550.0, "Conductivity": 0.0, "Solids": 0.0}
+        sensor_errors = []
+        for f in FEATURES:
+            v = raw.get(f, 0.0)
+            if v == 0.0 and f != "ph":
+                sensor_errors.append(f"{f} = 0 (capteur déconnecté ?)")
+            elif f in SATURATION_VALUES and v >= SATURATION_VALUES[f] and SATURATION_VALUES[f] > 0:
+                sensor_errors.append(f"{f} = {v} (capteur saturé / hors eau ?)")
+        if raw.get("Temperature", 0.0) == 0.0:
+            sensor_errors.append("Temperature = 0 (capteur déconnecté ?)")
+
         # Inférence diagnostic — température exclue (réservée au modèle de prédiction)
         x        = np.array([[raw[f] for f in FEATURES]])
         x_scaled = self.scaler.transform(x)
@@ -388,6 +400,10 @@ class SensorPipeline:
         proba    = float(self.model.predict_proba(x_scaled)[0][1])
         label    = "Non potable" if pred == 1 else "Potable"
         threshold = getattr(self.model, "threshold", 0.5)
+
+        if sensor_errors:
+            label = "Non fiable"
+            logger.warning("Capteurs invalides : %s", sensor_errors)
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
@@ -399,6 +415,7 @@ class SensorPipeline:
             "confidence_proba":  round(proba, 4),
             "threshold":         threshold,
             "out_of_bounds":     out_of_bounds,
+            "sensor_errors":     sensor_errors,
             "inference_time_ms": round(elapsed_ms, 2),
         }
 

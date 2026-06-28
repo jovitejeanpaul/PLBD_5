@@ -175,7 +175,11 @@ try:
 except Exception as e:
     logger.warning("Rapport d'évaluation non disponible : %s", e)
 
-_active_model_key: str = _models_report[0]["model_key"] if _models_report else "unknown"
+_default_model = _models_report[0]["model_key"] if _models_report else "unknown"
+try:
+    _active_model_key: str = get_config("active_model", _default_model)
+except Exception:
+    _active_model_key: str = _default_model
 
 # ── Buffers ──────────────────────────────────────────────────────────────────
 # Buffer brut : accumule les mesures entre deux échantillonnages horaires.
@@ -208,6 +212,9 @@ from app.database import (
     get_history_diagnostic,
     get_history_filtration,
     get_history_forecast,
+    get_config,
+    set_config,
+    get_all_config,
 )
 
 app = FastAPI(
@@ -221,7 +228,14 @@ app.include_router(auth_router)
 
 @app.on_event("startup")
 def startup():
+    global REFRESH_S
     initialize_database()
+    saved_dur = get_config("pump_duration_s", "")
+    if saved_dur and filter_controller:
+        filter_controller.pump_duration = float(saved_dur)
+    saved_refresh = get_config("refresh_interval_s", "")
+    if saved_refresh:
+        REFRESH_S = float(saved_refresh)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -541,6 +555,7 @@ async def select_model(model_key: str, request: Request):
         pipeline = SensorPipeline(model, scaler,
                                   sensor_reader=get_sensor_reader(mock=_STATUS.get("mock_mode", True)))
         _active_model_key = model_key
+        set_config("active_model", model_key)
 
         logger.info("Modèle actif changé → %s (rank=%d, seuil=%.2f)",
                     model_key, rank, getattr(model, "threshold", 0.5))
@@ -673,6 +688,59 @@ async def filter_status(request: Request):
         "running": filter_controller.is_running,
         "status":  filter_controller.running_status,
     }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# REST — Configuration admin
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/config")
+async def api_get_config(request: Request):
+    try:
+        get_current_user(request)
+    except Exception:
+        return JSONResponse(status_code=401, content={"error": "Non authentifié"})
+    return {
+        "pump_duration_s":    filter_controller.pump_duration if filter_controller else 300,
+        "refresh_interval_s": REFRESH_S,
+        "active_model":       _active_model_key,
+        **get_all_config(),
+    }
+
+
+@app.post("/api/config")
+async def api_set_config(request: Request):
+    try:
+        require_admin(request)
+    except Exception:
+        return JSONResponse(status_code=403, content={"error": "Accès réservé aux administrateurs"})
+
+    body = await request.json()
+    changes = []
+
+    if "pump_duration_s" in body and filter_controller:
+        dur = float(body["pump_duration_s"])
+        if 10 <= dur <= 1800:
+            filter_controller.pump_duration = dur
+            set_config("pump_duration_s", str(dur))
+            changes.append(f"Durée filtration : {dur:.0f}s")
+        else:
+            return JSONResponse(status_code=400, content={"error": "Durée entre 10s et 30min."})
+
+    if "refresh_interval_s" in body:
+        global REFRESH_S
+        interval = float(body["refresh_interval_s"])
+        if 1 <= interval <= 60:
+            REFRESH_S = interval
+            set_config("refresh_interval_s", str(interval))
+            changes.append(f"Intervalle diagnostic : {interval:.0f}s")
+        else:
+            return JSONResponse(status_code=400, content={"error": "Intervalle entre 1s et 60s."})
+
+    if not changes:
+        return {"message": "Aucune modification.", "timestamp": _now()}
+
+    return {"message": "Configuration mise à jour : " + ", ".join(changes), "timestamp": _now()}
 
 
 # ════════════════════════════════════════════════════════════════════════════
