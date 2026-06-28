@@ -272,6 +272,20 @@
     }
     .btn-primary:hover { background: #03d9ab; }
     .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-stop {
+      padding: .55rem 1.2rem;
+      border: 1px solid var(--red);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--red);
+      font-family: inherit;
+      font-size: .875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-stop:hover { background: var(--red); color: #fff; }
+    .btn-stop:disabled { opacity: .5; cursor: not-allowed; }
 
     .charts-grid {
       display: grid;
@@ -708,9 +722,25 @@
             </div>
           </li>
         </ul>
-        <button class="btn btn-primary" id="btnActivate" onclick="activateFilters()" style="margin-top:.75rem;display:none">
-          Activer la filtration
-        </button>
+        <div class="filter-controls" id="filterControls" style="margin-top:.75rem;display:none">
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <button class="btn btn-primary" id="btnStart" onclick="startFilter()">
+              Démarrer la filtration
+            </button>
+            <button class="btn btn-stop" id="btnStop" onclick="stopFilter()" style="display:none">
+              Stopper
+            </button>
+          </div>
+          <div class="filter-progress" id="filterProgress" style="display:none;margin-top:.5rem">
+            <div class="confidence-bar-bg">
+              <div class="confidence-bar-fill" id="filterBar" style="background:linear-gradient(90deg,var(--ocean),var(--mint))"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:.3rem">
+              <span class="filter-running-label" id="filterRunLabel" style="font-size:.75rem;color:var(--mint)"></span>
+              <span class="filter-running-label" id="filterTimeLeft" style="font-size:.75rem;color:var(--text-muted)"></span>
+            </div>
+          </div>
+        </div>
         <div class="filter-status" id="filterStatus" style="font-size:.78rem;color:var(--text-muted);margin-top:.4rem"></div>
       </div>
 
@@ -1058,14 +1088,18 @@ function updateFilterDecision(decision, potabilityNow) {
   }
 
   list.innerHTML = html;
-  btn.style.display = (userRole === 'administrator') ? '' : 'none';
+  document.getElementById('filterControls').style.display =
+    (userRole === 'administrator') ? '' : 'none';
+  checkFilterStatus();
 }
 
-async function activateFilters() {
-  const btn    = document.getElementById('btnActivate');
-  const status = document.getElementById('filterStatus');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Activation…';
+let _filterPollTimer = null;
+
+async function startFilter() {
+  const btnStart = document.getElementById('btnStart');
+  const status   = document.getElementById('filterStatus');
+  btnStart.disabled = true;
+  btnStart.innerHTML = '<span class="spinner"></span> Démarrage…';
   status.textContent = '';
 
   try {
@@ -1074,18 +1108,89 @@ async function activateFilters() {
     if (d.error) {
       status.style.color = 'var(--red)';
       status.textContent = d.error;
+      btnStart.disabled = false;
+      btnStart.textContent = 'Démarrer la filtration';
     } else {
-      const actionName = d.action ? d.action.filter_name : '';
       status.style.color = 'var(--mint)';
-      status.textContent = d.message + (actionName ? ' → ' + actionName : '');
+      status.textContent = d.message;
+      showFilterRunning();
     }
   } catch(e) {
     status.style.color = 'var(--red)';
     status.textContent = 'Erreur réseau : ' + e.message;
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = 'Activer la filtration';
+    btnStart.disabled = false;
+    btnStart.textContent = 'Démarrer la filtration';
   }
+}
+
+async function stopFilter() {
+  const btnStop = document.getElementById('btnStop');
+  const status  = document.getElementById('filterStatus');
+  btnStop.disabled = true;
+  btnStop.textContent = 'Arrêt…';
+
+  try {
+    const r = await fetch('/api/filter/stop', { method: 'POST' });
+    const d = await r.json();
+    status.style.color = 'var(--mint)';
+    status.textContent = d.message;
+  } catch(e) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    showFilterStopped();
+  }
+}
+
+function showFilterRunning() {
+  document.getElementById('btnStart').style.display = 'none';
+  document.getElementById('btnStop').style.display = '';
+  document.getElementById('btnStop').disabled = false;
+  document.getElementById('btnStop').textContent = 'Stopper';
+  document.getElementById('filterProgress').style.display = '';
+  startFilterPoll();
+}
+
+function showFilterStopped() {
+  document.getElementById('btnStart').style.display = '';
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStart').textContent = 'Démarrer la filtration';
+  document.getElementById('btnStop').style.display = 'none';
+  document.getElementById('filterProgress').style.display = 'none';
+  stopFilterPoll();
+}
+
+function startFilterPoll() {
+  stopFilterPoll();
+  _filterPollTimer = setInterval(checkFilterStatus, 2000);
+}
+
+function stopFilterPoll() {
+  if (_filterPollTimer) { clearInterval(_filterPollTimer); _filterPollTimer = null; }
+}
+
+async function checkFilterStatus() {
+  try {
+    const r = await fetch('/api/filter/status');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.running && d.status) {
+      showFilterRunning();
+      const s = d.status;
+      const pct = ((s.elapsed_s / s.duration_s) * 100).toFixed(1);
+      document.getElementById('filterBar').style.width = pct + '%';
+      document.getElementById('filterRunLabel').textContent =
+        s.filter_name + ' en cours…';
+      const remMin = Math.floor(s.remaining_s / 60);
+      const remSec = Math.round(s.remaining_s % 60);
+      document.getElementById('filterTimeLeft').textContent =
+        remMin + ':' + String(remSec).padStart(2, '0') + ' restant';
+    } else {
+      if (document.getElementById('btnStop').style.display !== 'none') {
+        showFilterStopped();
+      }
+    }
+  } catch(_) {}
 }
 
 // ════════════════════════════════════════════════════════════════════════════

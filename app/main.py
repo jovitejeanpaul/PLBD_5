@@ -609,6 +609,15 @@ async def activate_filters(request: Request):
             content={"error": "Pipeline de diagnostic non disponible."},
         )
 
+    if filter_controller.is_running:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "Une pompe est déjà en cours de fonctionnement.",
+                "running": filter_controller.running_status,
+            },
+        )
+
     result = pipeline.run_once()
 
     decision, action = filter_controller.decide_and_activate(
@@ -626,6 +635,43 @@ async def activate_filters(request: Request):
         "action":         action.to_dict() if action else None,
         "message":        decision.reason,
         "timestamp":      _now(),
+    }
+
+
+@app.post("/api/filter/stop")
+async def stop_filter(request: Request):
+    try:
+        require_admin(request)
+    except Exception:
+        return JSONResponse(status_code=403, content={"error": "Accès réservé aux administrateurs"})
+
+    if filter_controller is None:
+        return JSONResponse(status_code=503, content={"error": "FilterController non disponible."})
+
+    status = filter_controller.stop_pump()
+    if status is None:
+        return {"message": "Aucune pompe en cours.", "timestamp": _now()}
+
+    return {
+        "message":  f"{status['filter_name']} arrêté après {status['elapsed_s']:.0f}s.",
+        "stopped":  status,
+        "timestamp": _now(),
+    }
+
+
+@app.get("/api/filter/status")
+async def filter_status(request: Request):
+    try:
+        get_current_user(request)
+    except Exception:
+        return JSONResponse(status_code=401, content={"error": "Non authentifié"})
+
+    if filter_controller is None:
+        return {"running": False}
+
+    return {
+        "running": filter_controller.is_running,
+        "status":  filter_controller.running_status,
     }
 
 

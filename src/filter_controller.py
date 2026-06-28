@@ -72,7 +72,7 @@ FILTER_CONFIG: dict[int, dict] = {
     },
 }
 
-DEFAULT_PUMP_DURATION: float = 5.0
+DEFAULT_PUMP_DURATION: float = 300.0   # 5 minutes
 
 # Seuils de décision (NM 03.7.001)
 THRESHOLDS = {
@@ -152,6 +152,9 @@ class FilterController:
         self.mock          = (not _GPIO_AVAILABLE) if mock is None else mock
         self._lock         = threading.Lock()
         self._active_pins: set[int] = set()
+        self._stop_event:  threading.Event = threading.Event()
+        self._pump_thread: threading.Thread | None = None
+        self._running_filter: dict | None = None
 
         if not self.mock:
             self._setup_gpio()
@@ -184,58 +187,117 @@ class FilterController:
                 pass
             logger.info("GPIO nettoyé — toutes les pompes éteintes.")
 
-    # ── Activation d'une pompe ────────────────────────────────────────────────
+    # ── État de la pompe ────────────────────────────────────────────────────
 
-    def activate_pump(
+    @property
+    def is_running(self) -> bool:
+        return self._pump_thread is not None and self._pump_thread.is_alive()
+
+    @property
+    def running_status(self) -> dict | None:
+        if not self.is_running or self._running_filter is None:
+            return None
+        elapsed = time.time() - self._running_filter["start_time"]
+        return {
+            "filter_id":    self._running_filter["filter_id"],
+            "filter_name":  self._running_filter["filter_name"],
+            "reason":       self._running_filter["reason"],
+            "duration_s":   self._running_filter["duration"],
+            "elapsed_s":    round(elapsed, 1),
+            "remaining_s":  round(max(0, self._running_filter["duration"] - elapsed), 1),
+            "mock":         self.mock,
+        }
+
+    # ── Activation d'une pompe (non-bloquante) ───────────────────────────────
+
+    def start_pump(
         self,
         filter_id: int,
         reason:    str = "",
         duration:  float | None = None,
     ) -> FilterAction:
-        """Active une pompe pendant ``duration`` secondes puis l'éteint."""
+        """
+        Démarre une pompe en arrière-plan. Retourne immédiatement.
+        La pompe s'arrête automatiquement après ``duration`` secondes
+        ou manuellement via ``stop_pump()``.
+        """
         if filter_id not in FILTER_CONFIG:
             raise ValueError(f"filter_id doit être 1, 2 ou 3 — reçu : {filter_id}")
+
+        if self.is_running:
+            raise RuntimeError(
+                f"Pompe {self._running_filter['filter_id']} déjà en cours. "
+                "Arrêtez-la d'abord avec stop_pump()."
+            )
 
         cfg  = FILTER_CONFIG[filter_id]
         pin  = cfg["pin"]
         dur  = duration if duration is not None else self.pump_duration
         name = cfg["name"]
-        activated = False
 
-        with self._lock:
+        self._stop_event.clear()
+        self._running_filter = {
+            "filter_id":  filter_id,
+            "filter_name": name,
+            "pin":        pin,
+            "reason":     reason,
+            "duration":   dur,
+            "start_time": time.time(),
+        }
+
+        def _run():
             try:
-                logger.info("Activation pompe %d — %s (pin=%d, durée=%.1fs) [%s]",
+                logger.info("Pompe %d — %s DÉMARRÉE (pin=%d, durée=%.0fs) [%s]",
                             filter_id, name, pin, dur, reason)
 
                 if not self.mock:
-                    GPIO.output(pin, GPIO.HIGH)
-                    self._active_pins.add(pin)
+                    with self._lock:
+                        GPIO.output(pin, GPIO.HIGH)
+                        self._active_pins.add(pin)
 
-                time.sleep(dur)
-                activated = True
+                stopped = self._stop_event.wait(timeout=dur)
 
+                if stopped:
+                    logger.info("Pompe %d — %s ARRÊTÉE manuellement après %.1fs",
+                                filter_id, name, time.time() - self._running_filter["start_time"])
+                else:
+                    logger.info("Pompe %d — %s TERMINÉE (durée complète %.0fs)",
+                                filter_id, name, dur)
             except Exception as e:
-                logger.error("Erreur activation pompe %d : %s", filter_id, e)
+                logger.error("Erreur pompe %d : %s", filter_id, e)
             finally:
                 if not self.mock and pin in self._active_pins:
-                    try:
-                        GPIO.output(pin, GPIO.LOW)
-                    except Exception:
-                        pass
-                    self._active_pins.discard(pin)
+                    with self._lock:
+                        try:
+                            GPIO.output(pin, GPIO.LOW)
+                        except Exception:
+                            pass
+                        self._active_pins.discard(pin)
+                self._running_filter = None
 
-                status = "OK (MOCK)" if self.mock else ("OK" if activated else "ERREUR")
-                logger.info("Pompe %d — %s — %s", filter_id, name, status)
+        self._pump_thread = threading.Thread(target=_run, daemon=True)
+        self._pump_thread.start()
 
         return FilterAction(
             filter_id   = filter_id,
             filter_name = name,
             pin         = pin,
-            activated   = activated if not self.mock else True,
+            activated   = True,
             duration_s  = dur,
             reason      = reason,
             mock        = self.mock,
         )
+
+    def stop_pump(self) -> dict | None:
+        """Arrête la pompe en cours. Retourne le statut au moment de l'arrêt."""
+        if not self.is_running:
+            return None
+
+        status = self.running_status
+        self._stop_event.set()
+        self._pump_thread.join(timeout=5)
+        logger.info("Pompe arrêtée par l'opérateur.")
+        return status
 
     # ── Logique de décision ──────────────────────────────────────────────────
 
@@ -364,7 +426,8 @@ class FilterController:
         **context,
     ) -> tuple[FilterDecision, FilterAction | None]:
         """
-        Point d'entrée principal : décide puis active la pompe si nécessaire.
+        Point d'entrée principal : décide puis démarre la pompe si nécessaire.
+        Non-bloquant — la pompe tourne en arrière-plan.
 
         Returns
         -------
@@ -374,12 +437,12 @@ class FilterController:
 
         action = None
         if decision.filter_to_activate is not None:
-            action = self.activate_pump(
+            action = self.start_pump(
                 decision.filter_to_activate,
                 reason=decision.reason,
                 duration=duration,
             )
-            logger.info("Filtration : %s", decision.reason)
+            logger.info("Filtration démarrée : %s", decision.reason)
         else:
             logger.info("Pas de filtration : %s", decision.reason)
 
