@@ -996,11 +996,15 @@ function updateDiagnostic(data) {
 }
 
 function updateFilterDecision(decision, potabilityNow) {
-  const list = document.getElementById('filterList');
-  const btn  = document.getElementById('btnActivate');
+  const list   = document.getElementById('filterList');
+  const btn    = document.getElementById('btnActivate');
+  const status = document.getElementById('filterStatus');
+
+  // Réinitialiser le statut à chaque mise à jour
+  status.textContent = '';
 
   if (!decision || decision.filter_to_activate === null) {
-    // Eau potable ou pas de décision
+    // Eau potable ou pas de décision — aucun filtre, aucun bouton
     let html = `
       <li class="filter-item">
         <div class="filter-dot filter-ok"></div>
