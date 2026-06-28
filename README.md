@@ -1,501 +1,292 @@
-# 💧 PLBD — Système de Détection de la Potabilité de l'Eau
+# AQUA-SENS — Systeme Intelligent de Surveillance de la Qualite de l'Eau
 
-> Système embarqué de traitement et de prédiction de la qualité de l'eau,  
-> combinant capteurs bas coût, vision par ordinateur et modèles ML explicables.
+> Systeme embarque multi-filtre avec IA sur Raspberry Pi 4 pour le diagnostic, la prevision et le traitement automatise de la qualite de l'eau.
 
----
-
-## Table des matières
-
-1. [Vue d'ensemble](#1-vue-densemble)
-2. [Contexte et contraintes](#2-contexte-et-contraintes)
-3. [Architecture du système](#3-architecture-du-système)
-4. [Structure du projet](#4-structure-du-projet)
-5. [Installation](#5-installation)
-6. [Démarrage rapide](#6-démarrage-rapide)
-7. [Pipeline ML](#7-pipeline-ml)
-8. [Choix techniques](#8-choix-techniques)
-9. [Résultats et performances](#9-résultats-et-performances)
-10. [Limites connues](#10-limites-connues)
-11. [Feuille de route](#11-feuille-de-route)
-12. [Contribuer](#12-contribuer)
+**Ecole Centrale Casablanca — Projet PLBD**
 
 ---
 
-## 1. Vue d'ensemble
+## Vue d'ensemble
 
-PLBD est un système intelligent de surveillance et de traitement de la qualité de l'eau conçu pour des **contextes à ressources limitées** — zones rurales, points d'eau sans infrastructure de laboratoire, ou sites nécessitant une surveillance continue à faible coût.
+AQUA-SENS est un systeme concu pour les contextes a ressources limitees (zones rurales, points d'eau sans laboratoire). Il combine des capteurs bas cout, de l'intelligence artificielle embarquee et une filtration automatisee pour surveiller et traiter l'eau en continu.
 
-Le système remplit trois fonctions complémentaires :
-
-| Fonction | Description | Statut |
+| Module | Description | Statut |
 |---|---|---|
-| **Détection temps réel** | Classifie l'eau comme potable ou non potable à partir de 4 capteurs | ✅ Opérationnel |
-| **Prédiction de turbidité** | Estime la turbidité (NTU) à partir d'une image caméra | 🔄 En développement |
-| **Filtration automatisée** | Sélectionne et active les filtres adaptés à la qualité détectée | 🔄 En développement |
-| **Prévision temporelle** | Anticipe la qualité de l'eau dans les prochaines heures | 📋 Planifié |
-| **Interface web** | Visualisation des mesures, alertes et prédictions en temps réel | 📋 Planifié |
+| **Diagnostic temps reel** | Classification potable/non potable a partir de 4 capteurs | Operationnel |
+| **Prevision 24h (LSTM)** | Anticipe l'evolution des parametres sur 24 heures | Operationnel |
+| **Filtration automatisee** | Active le filtre adapte selon le diagnostic | Operationnel |
+| **Moteur d'alertes** | Alertes preventives basees sur la norme NM 03.7.001 | Operationnel |
+| **Interface web** | Dashboard temps reel avec historiques et gestion | Operationnel |
+| **Explicabilite SHAP** | Importance de chaque capteur dans la decision du modele | Operationnel |
 
 ---
 
-## 2. Contexte et contraintes
+## Architecture
 
-### Problème métier
+```
+                  Bassine (source d'eau)
+                         |
+            +-----------+-----------+
+            |           |           |
+        pH Meter    TDS Meter    Turbidite
+        (analog)    Gravity V1   TSW-20M
+            |        (EC+TDS)       |
+            +-----+-----+-----+----+
+                  |           |
+              ADS1115       DS18B20
+              (I2C)        (1-Wire)
+                  |           |
+            +-----+-----------+-----+
+            |   Raspberry Pi 4      |
+            |                       |
+            |  sensor_inference.py  |  --> Diagnostic (CatBoost)
+            |  filter_controller.py |  --> GPIO (3 pompes)
+            |  app/main.py (FastAPI)|  --> Interface web
+            |  prediction/ (LSTM)   |  --> Prevision 24h
+            +-----------+-----------+
+                        |
+               Interface Web (port 8000)
+               Diagnostic | Prevision | Historiques
+```
 
-La vérification de la potabilité de l'eau requiert normalement une analyse physico-chimique complète en laboratoire — coûteuse, lente, et inaccessible dans de nombreux contextes. Ce projet vise à construire un **outil de triage à faible coût** permettant d'identifier les eaux suspectes avant toute analyse approfondie.
+### Capteurs
 
-### Contrainte budgétaire — sélection des features
-
-Le dataset contient **9 variables physico-chimiques**. Seules **4** sont utilisées pour la modélisation, contraintes par le coût des capteurs de mesure :
-
-| Variable | Capteur | Coût | Statut |
+| Capteur | Parametre | Interface | Pin |
 |---|---|---|---|
-| `ph` | Électrode pH | 💲 Faible | ✅ Retenu |
-| `Solids` (TDS) | Conductimètre TDS | 💲 Faible | ✅ Retenu |
-| `Conductivity` | Conductimètre EC | 💲 Faible | ✅ Retenu |
-| `Turbidity` | Turbidimètre / Caméra | 💲 Faible | ✅ Retenu |
-| `Hardness` | Titrimètre + réactifs | 💲💲 Moyen | ❌ Écarté |
-| `Chloramines` | Spectrophotomètre | 💲💲💲 Élevé | ❌ Écarté |
-| `Sulfate` | Chromatographe ionique | 💲💲💲 Élevé | ❌ Écarté |
-| `Organic_carbon` | Analyseur TOC | 💲💲💲💲 Très élevé | ❌ Écarté |
-| `Trihalomethanes` | GC-MS | 💲💲💲💲 Très élevé | ❌ Écarté |
+| pH Meter V1.1 | pH [0-14] | ADS1115 A2 | I2C |
+| Gravity TDS Meter V1.0 | Conductivite [uS/cm] + TDS [mg/L] | ADS1115 A1 | I2C |
+| TSW-20M | Turbidite [NTU] | ADS1115 A3 | I2C |
+| DS18B20 | Temperature [C] | 1-Wire | GPIO 4 |
 
-> ⚠️ **Limite fondamentale** : Les variables les plus prédictives (Sulfate, Organic Carbon, Trihalomethanes) sont précisément celles hors budget. La corrélation entre les 4 features retenues et la cible est faible (~0.08–0.12). Ce système est un **outil de triage**, non un substitut à une analyse de laboratoire complète.
+### Filtres
 
-### Convention de labellisation
-
-```
-Potability = 1  →  Non potable  (classe dangereuse — majoritaire ~61%)
-Potability = 0  →  Potable      (classe minoritaire ~39%)
-```
-
-Cette convention place la classe dangereuse en tant que **classe positive**, ce qui oriente naturellement les métriques sklearn (recall, F1, précision) vers la détection de l'eau non potable.
+| Pompe | Filtre | Usage | GPIO |
+|---|---|---|---|
+| 1 | Sediments | Particules en suspension, sable | PIN 23 |
+| 2 | Charbon compresse | Micro-particules fines, metaux lourds | PIN 24 |
+| 3 | Charbon actif | Chlore, pesticides, composes organiques | PIN 25 |
 
 ---
 
-## 3. Architecture du système
+## Structure du projet
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       COUCHE ACQUISITION                         │
-│                                                                   │
-│   Capteurs physiques              Caméra embarquée               │
-│   (ph, TDS, Conductivity)         (image eau)                    │
-└──────────────┬────────────────────────────┬─────────────────────┘
-               │                            │
-               ▼                            ▼
-┌──────────────────────┐        ┌───────────────────────┐
-│  Séries temporelles  │        │  Modèle Vision (CNN)  │
-│  des mesures         │        │  Image → Turbidité    │
-└──────────┬───────────┘        └──────────┬────────────┘
-           │                               │
-           └─────────────┬─────────────────┘
-                         │
-           ┌─────────────▼──────────────────┐
-           │          COUCHE ML             │
-           │                                │
-           │  ┌──────────────────────────┐  │
-           │  │  Classifieur (actuel)    │  │
-           │  │  Potabilité temps réel   │  │
-           │  │  ThresholdClassifier     │  │
-           │  └──────────────────────────┘  │
-           │                                │
-           │  ┌──────────────────────────┐  │
-           │  │  Modèle temporel         │  │
-           │  │  Prévision t+n           │  │
-           │  └──────────────────────────┘  │
-           └─────────────┬──────────────────┘
-                         │
-           ┌─────────────▼──────────────────┐
-           │       COUCHE DÉCISION          │
-           │   Système multi-filtres        │
-           │   (règles + ML)                │
-           └─────────────┬──────────────────┘
-                         │
-           ┌─────────────▼──────────────────┐
-           │       INTERFACE WEB            │
-           │  Mesures temps réel            │
-           │  Alertes + Prévisions          │
-           │  Explications SHAP             │
-           └────────────────────────────────┘
+PLBD_5/
+  src/
+    config.py                # Configuration centrale (seuils, features, chemins)
+    data_processing.py       # Pipeline de traitement des donnees Kaggle
+    tuning.py                # Grid Search hyperparametres (8 modeles)
+    train_model.py           # Entrainement, CV, evaluation, sauvegarde
+    threshold_classifier.py  # Wrapper modele + seuil de decision
+    sensor_inference.py      # Lecture capteurs + diagnostic temps reel
+    filter_controller.py     # Controle des pompes GPIO
+    explainability.py        # SHAP global (PC) + resume JSON (Pi)
+  prediction/
+    model.py                 # Architecture LSTM (PyTorch)
+    1_generate_data.py       # Generation dataset synthetique 120 jours
+    2_preprocess.py          # Normalisation + sequences supervisees
+    3_train_model.py         # Entrainement LSTM avec early stopping
+    4_evaluate.py            # Metriques + integration diagnostic
+    alerte_engine.py         # Alertes preventives NM 03.7.001
+    export_onnx.py           # Export LSTM en ONNX (deploiement Pi)
+  app/
+    main.py                  # Backend FastAPI (WebSocket + REST)
+    auth.py                  # Authentification JWT (login/register/roles)
+    database.py              # SQLite (utilisateurs, historiques, config)
+    security.py              # Hashing bcrypt, JWT encode/decode
+    static/
+      index.html             # Dashboard SPA (diagnostic, prevision, historiques)
+      login.html             # Page de connexion/inscription
+  tests/                     # 203 tests unitaires
+  outputs/
+    models/                  # Modeles .joblib + scaler
+    reports/                 # Rapports CSV/JSON/TXT
+    figures/                 # Figures matplotlib
 ```
 
 ---
 
-## 4. Structure du projet
+## Installation
 
-```
-PLBD/
-│
-├── 📁 src/                          # Code source
-│   ├── config.py                    # Configuration centrale (source de vérité)
-│   ├── data/
-│   │   ├── data_processing.py       # Pipeline prétraitement
-│   │   └── feature_engineering.py  # GMM features, transforms
-│   ├── models/
-│   │   ├── train_model.py           # Entraînement + ThresholdClassifier
-│   │   ├── tuning.py                # Grid Search + threshold tuning
-│   │   ├── forecasting.py           # Prévision temporelle (à venir)
-│   │   └── vision.py                # Turbidité par image (à venir)
-│   ├── evaluation/
-│   │   ├── metrics.py               # Métriques, score composite, rapport
-│   │   ├── plots.py                 # ROC, confusion matrix, CV comparison
-│   │   └── explainability.py        # SHAP — global + individuel
-│   └── api/
-│       ├── main.py                  # FastAPI endpoints
-│       ├── schemas.py               # Pydantic models
-│       └── inference.py             # Chargement modèle + predict
-│
-├── 📁 app/                          # Interface web
-│
-├── 📁 data/
-│   ├── raw/                         # ⚠️ Jamais modifié — source de vérité
-│   │   └── water_potability.csv
-│   ├── processed/                   # Sorties data_processing
-│   └── external/                    # Données météo, géo, temporelles
-│
-├── 📁 models/                       # Modèles sérialisés (.joblib)
-│   └── runs/                        # Versionné par timestamp
-│       └── YYYY-MM-DD_HH-MM/
-│           ├── model_1_rf.joblib    # ThresholdClassifier (seuil intégré)
-│           ├── model_2_xgb.joblib
-│           └── scaler.joblib
-│
-├── 📁 outputs/
-│   ├── figures/
-│   │   ├── tuning/                  # Heatmaps Grid Search
-│   │   └── evaluation/              # ROC, confusion matrix, SHAP plots
-│   └── reports/
-│       ├── best_params.json         # Meilleurs hyperparamètres + seuils
-│       ├── tuning_report.csv        # Toutes les combinaisons testées
-│       ├── evaluation_report.csv    # Métriques CV + test
-│       └── model_summary.txt        # Rapport lisible synthèse
-│
-├── 📁 notebooks/
-│   └── water_potability_eda.ipynb   # EDA complète + analyses clustering
-│
-├── 📁 tests/
-│   ├── test.py                      # 75 tests unitaires
-│   └── conftest.py                  # Fixtures partagées pytest
-│
-├── 📁 .github/
-│   └── workflows/
-│       └── ci.yml                   # Tests automatiques CI/CD
-│
-├── .env.example                     # Template credentials (Kaggle, etc.)
-├── .gitignore
-├── requirements.txt
-├── requirements-dev.txt
-├── Makefile
-└── README.md
-```
-
----
-
-## 5. Installation
-
-### Prérequis
-
-- Python 3.10+
-- pip
-
-### Installation des dépendances
+### PC (entrainement)
 
 ```bash
-# Cloner le projet
-git clone https://github.com/votre-org/PLBD.git
-cd PLBD
-
-# Environnement virtuel (recommandé)
-python -m venv .venv
-source .venv/bin/activate        # Linux/Mac
-.venv\Scripts\activate           # Windows
-
-# Dépendances core
+git clone https://github.com/jovitejeanpaul/PLBD_5.git
+cd PLBD_5
 pip install -r requirements.txt
-
-# Dépendances dev (tests, linting)
-pip install -r requirements-dev.txt
 ```
 
-### Configuration des credentials Kaggle
+### Raspberry Pi (deploiement)
 
 ```bash
-# 1. Obtenir la clé API sur https://www.kaggle.com/settings → Create New Token
-# 2. Copier le template
-cp .env.example .env
+git clone https://github.com/jovitejeanpaul/PLBD_5.git
+cd PLBD_5
+pip install -r requirements-pi.txt
+pip install "bcrypt==4.0.1"   # compatibilite passlib
 
-# 3. Renseigner vos credentials dans .env
-KAGGLE_USERNAME=votre_username
-KAGGLE_KEY=votre_api_key
-```
-
-### Configuration pour un nouveau membre de l'équipe
-
-```bash
-python -c "from src.data.data_processing import setup_kaggle_credentials; setup_kaggle_credentials()"
+# Creer le fichier .env
+cat > .env <<'EOF'
+SECRET_KEY=votre-cle-secrete-ici
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+EOF
 ```
 
 ---
 
-## 6. Démarrage rapide
+## Demarrage rapide
+
+### 1. Pipeline ML (sur PC)
 
 ```bash
-# Téléchargement automatique du dataset + pipeline complet
-python src/models/tuning.py           # ~20-40 min (Grid Search)
-python src/models/train_model.py      # ~5-10 min (entraînement + évaluation)
+cd src/
 
-# Sans SHAP (plus rapide)
-python src/models/train_model.py --no-shap
+# Tuning des hyperparametres (8 modeles, Grid Search)
+python tuning.py
 
-# Avec hyperparamètres par défaut (sans tuning préalable)
-python src/models/train_model.py --no-tuning
+# Entrainement + evaluation + sauvegarde des top modeles
+python train_model.py
 
-# Lancer les tests
-python -m pytest tests/ -v
-
-# Explorer les données
-jupyter notebook notebooks/water_potability_eda.ipynb
+# Explicabilite SHAP
+python explainability.py
 ```
+
+### 2. Pipeline LSTM (sur PC)
+
+```bash
+cd prediction/
+
+# Generer le dataset synthetique
+python 1_generate_data.py
+
+# Preprocesser (normalisation + sequences)
+python 2_preprocess.py
+
+# Entrainer le LSTM
+python 3_train_model.py
+
+# Evaluer
+python 4_evaluate.py
+```
+
+### 3. Lancer l'interface web
+
+```bash
+# Sur PC (mode mock, capteurs simules)
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# Sur Raspberry Pi (capteurs reels)
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Identifiants par defaut :
+- **Admin** : `admin` / `Admin@2026`
+- **Operateur** : `operateur` / `Oper@2026`
 
 ---
 
-## 7. Pipeline ML
+## Pipeline ML — Diagnostic
 
-### Vue d'ensemble
+### Donnees
 
-```
-CSV brut
-   │
-   ▼
-raw_data_processing()          # Nettoyage, outliers, imputation, relabélisation
-   │
-   ▼
-preprocess_for_ml()            # Split stratifié + RobustScaler
-   │
-   ▼
-SMOTETomek                     # Rééquilibrage train set uniquement
-   │
-   ▼
-tuning.py                      # Grid Search (G-mean scorer)
-   │  └── threshold tuning     # Seuil optimal par modèle (Fbeta β=2)
-   │
-   ▼
-train_model.py
-   │  ├── cross_validate()     # StratifiedKFold (10 folds)
-   │  ├── ThresholdClassifier  # Seuil intégré au modèle
-   │  └── save (.joblib)
-   │
-   ▼
-evaluation/
-   ├── metrics.py              # Score composite (5 métriques pondérées)
-   ├── plots.py                # ROC, PR, confusion matrix, feature importance
-   └── explainability.py       # SHAP global + individuel + interactions
-```
+- **Source** : Kaggle Water Potability (3276 echantillons)
+- **Features** : pH, Solids (TDS), Conductivity, Turbidity
+- **Cible** : Potability (0=Potable, 1=Non potable)
+- **Nettoyage** : ecretage IQR, imputation pH par mediane conditionnelle, bornes physiques strictes (TRAINING_BOUNDS)
 
-### Gestion du déséquilibre des classes
+### Modeles evalues
 
-Le dataset est déséquilibré (~61% Non potable / ~39% Potable). Trois stratégies complémentaires sont appliquées :
+| Modele | Composite | ROC-AUC | G-mean | F1 |
+|---|---|---|---|---|
+| CatBoost | 0.5717 | 0.6301 | — | 0.7812 |
+| Random Forest | 0.5634 | 0.6337 | — | 0.7759 |
+| LightGBM | 0.5601 | 0.6244 | — | 0.7712 |
+| Gradient Boosting | 0.5547 | 0.6357 | — | 0.7471 |
+| XGBoost | 0.5332 | 0.5937 | — | 0.7548 |
 
-| Stratégie | Où | Effet |
+Le modele actif est selectionnable depuis l'interface (admin).
+
+### Metriques
+
+- **Optimisation Grid Search** : G-mean (equilibre recall des deux classes)
+- **Score composite** : gmean (25%) + fbeta (20%) + pr_auc (20%) + mcc (20%) + roc_auc (15%)
+- **Seuil de decision** : 0.5 en production (configurable)
+
+---
+
+## Pipeline LSTM — Prevision
+
+- **Architecture** : LSTM bi-couche (hidden=64, dropout=0.2)
+- **Entree** : 24 mesures horaires x 5 features (pH, TDS, Conductivite, Turbidite, Temperature)
+- **Sortie** : 24 heures de prevision x 5 features
+- **Buffer** : mediane des 5 dernieres minutes stockee toutes les heures
+- **Alertes** : norme NM 03.7.001, regles combinees (contamination microbiologique, intrusion agricole, acidification, proliferation bacterienne)
+
+---
+
+## Filtration automatisee
+
+Un seul filtre active par cycle, selon la priorite :
+
+| Priorite | Condition | Filtre |
 |---|---|---|
-| `SMOTETomek` | Train set uniquement | Sur-échantillonnage synthétique + nettoyage frontière |
-| `class_weight="balanced"` | Tous les estimateurs | Pénalise davantage les erreurs sur la classe minoritaire |
-| `G-mean scorer` | GridSearchCV | Empêche le biais vers la classe majoritaire |
+| P1 | Turbidite > 5 NTU | Sediments |
+| P2 | pH hors [6.5, 8.5] ou contexte chimique | Charbon actif |
+| P3 | Turbidite 2-5 NTU | Charbon compresse |
+| P4 | Non potable sans regle P1-P3 | Charbon actif (defaut) + explication SHAP |
+| — | Conductivite > 2700 uS/cm | Recommandation operateur (pas de pompe) |
 
-### ThresholdClassifier — seuil de décision intégré
-
-```python
-# Le problème sans wrapper
-model = joblib.load("model.joblib")
-model.predict(X)   # ← utilise 0.5 par défaut, pas le seuil optimal ❌
-
-# La solution
-model = joblib.load("model.joblib")  # ThresholdClassifier
-model.predict(X)        # ← seuil optimal appliqué automatiquement ✓
-model.threshold         # ← 0.32 (exemple) ✓
-model.predict_proba(X)  # ← probabilités brutes inchangées ✓
-```
-
-### Score composite de classement
-
-Les modèles sont classés selon un score composite pondéré :
-
-```
-Score = 0.25 × G-mean   +  0.20 × Fbeta(β=2)
-      + 0.20 × PR-AUC   +  0.20 × MCC
-      + 0.15 × ROC-AUC
-```
-
-| Métrique | Poids | Justification |
-|---|---|---|
-| G-mean | 0.25 | Équilibre recall₀ × recall₁ — anti-biais classe majoritaire |
-| Fbeta(β=2) | 0.20 | Priorité recall Non potable (santé publique) |
-| PR-AUC | 0.20 | Robustesse au déséquilibre |
-| MCC | 0.20 | Vision globale des 4 quadrants de la matrice de confusion |
-| ROC-AUC | 0.15 | Discrimination générale |
+Activation manuelle par l'admin (bouton Demarrer/Stopper, duree configurable, defaut 5 min).
 
 ---
 
-## 8. Choix techniques
+## Interface web
 
-### Standardisation — RobustScaler
+### Pages
 
-Le `RobustScaler` est privilégié sur `StandardScaler` et `MinMaxScaler` car il centre sur la **médiane** et scale sur l'**IQR** — insensible aux outliers résiduels, critiques dans les distributions de Conductivity et Solids.
+- **Accueil** : fonctionnalites, performances des modeles, etat du systeme, configuration admin, gestion utilisateurs
+- **Diagnostic temps reel** : 5 cartes capteurs, badge potabilite, confiance, SHAP, recommandation filtration avec demarrer/stopper
+- **Prevision 24h** : graphiques par parametre, alertes preventives (CRITICAL/WARNING/INFO)
+- **Historiques** : tableaux + graphiques d'evolution, export CSV
 
-### Scorer GridSearch — G-mean
+### Roles
 
-Le G-mean (`√(recall₁ × recall₀)`) est utilisé pour le Grid Search car il vaut **0** dès qu'un modèle prédit tout dans une classe, ce que Fbeta seul ne garantit pas :
+| Fonctionnalite | Admin | Operateur |
+|---|---|---|
+| Diagnostic temps reel | Oui | Oui |
+| Prevision et alertes | Oui | Oui |
+| Historiques et export CSV | Oui | Oui |
+| Activer/stopper filtration | Oui | Non |
+| Changer de modele | Oui | Non |
+| Configuration systeme | Oui | Non |
+| Gerer les utilisateurs | Oui | Non |
 
-```
-Modèle "prédit tout Non potable" :
-  Fbeta(β=2) ≈ 0.89  ← score excellent pour un modèle inutile ❌
-  G-mean     = 0.00  ← détecté et pénalisé ✓
-```
+### Securite
 
-### Modèles évalués
+- JWT en cookie httpOnly (30 min d'expiration)
+- Hashing bcrypt des mots de passe
+- WebSocket protege par cookie JWT
+- Inscription libre (role operateur) + creation admin
 
-| Modèle | Particularité |
+---
+
+## Technologies
+
+| Composant | Technologie |
 |---|---|
-| Logistic Regression | Baseline linéaire |
-| SVM (RBF) | Efficace en faible dimension |
-| Random Forest | Robuste, feature importance fiable |
-| Extra Trees | Plus aléatoire que RF |
-| Gradient Boosting | Boosting séquentiel classique |
-| XGBoost | `scale_pos_weight` pour déséquilibre |
-| LightGBM | Ultra-rapide sur histogrammes |
-| CatBoost | `auto_class_weights="Balanced"` |
-
-### Explainabilité SHAP
-
-SHAP est intégré dans `evaluation/explainability.py` pour trois niveaux d'analyse :
-
-| Analyse | Figure | Usage |
-|---|---|---|
-| **Global** | Summary plot + Beeswarm | Importance et direction des features |
-| **Interaction** | Dependence plot | Effets croisés entre variables |
-| **Local** | Waterfall + Force plot | Explication d'une prédiction individuelle |
-
-L'explication locale est particulièrement importante pour l'interface web : l'opérateur comprend **pourquoi** l'eau est classée non potable et peut choisir le filtre approprié.
+| Micro-controleur | Raspberry Pi 4 (ARM64, Bullseye, Python 3.9) |
+| ML | scikit-learn, CatBoost, XGBoost, LightGBM |
+| Deep Learning | PyTorch (LSTM), ONNX Runtime (fallback) |
+| Explicabilite | SHAP |
+| Backend | FastAPI, uvicorn, WebSocket |
+| Frontend | HTML/CSS/JS, Chart.js |
+| Base de donnees | SQLite |
+| Auth | python-jose (JWT), passlib/bcrypt |
+| GPIO | RPi.GPIO |
+| Capteurs | Adafruit ADS1115 (I2C), DS18B20 (1-Wire) |
 
 ---
 
-## 9. Résultats et performances
+## Licence
 
-> Les résultats ci-dessous sont indicatifs et varient selon le run.  
-> Les rapports complets sont générés dans `outputs/reports/` à chaque run.
-
-### Métriques test (top modèles)
-
-| Modèle | G-mean | ROC-AUC | PR-AUC | MCC | Fbeta(β=2) | Seuil |
-|---|---|---|---|---|---|---|
-| Random Forest | ~0.47 | ~0.64 | ~0.75 | ~0.23 | ~0.85 | 0.32 |
-| XGBoost | ~0.46 | ~0.65 | ~0.74 | ~0.21 | ~0.83 | 0.24 |
-| LightGBM | ~0.45 | ~0.64 | ~0.73 | ~0.18 | ~0.77 | 0.25 |
-
-### Interprétation
-
-Ces performances reflètent la **contrainte budgétaire** documentée en section 2. Les 4 features retenues ont une corrélation individuelle faible avec la cible (~0.08–0.12). Le ROC-AUC de ~0.64 est proche du plafond atteignable avec ce sous-ensemble de variables.
-
-Le modèle complet utilisant les 9 features atteint un ROC-AUC de ~0.75, confirmant un gap de ~0.11 dû à la contrainte budgétaire.
-
----
-
-## 10. Limites connues
-
-| Limite | Impact | Mitigation |
-|---|---|---|
-| Faible corrélation features → cible | ROC-AUC plafonné ~0.65 | Documenté et assumé |
-| Dataset statique (pas temporel) | Pas de saisonnalité | Prévu en v2 |
-| Dataset non géolocalisé | Modèle non contextualisé | Données externes prévues |
-| Turbidité par caméra non validée | Vision en développement | Dataset en constitution |
-| `contamination` IF ≤ 0.5 | Non potable majoritaire → paradigme anomalie inadapté | IsolationForest comme signal complémentaire uniquement |
-
----
-
-## 11. Feuille de route
-
-### v1.0 — Actuel ✅
-- Pipeline ML complet (data_processing → tuning → train → evaluation)
-- ThresholdClassifier avec seuil intégré
-- 8 modèles optimisés par Grid Search + G-mean scorer
-- SMOTETomek + class_weight pour le déséquilibre
-- Explainabilité SHAP (global + local)
-- 75 tests unitaires
-- Notebook EDA complet avec analyses de clustering
-
-### v1.5 — En cours 🔄
-- Prédiction de turbidité par image caméra (CNN léger — MobileNetV2)
-- Système multi-filtres (règles de décision basées sur la classification)
-- API FastAPI pour l'inférence temps réel
-
-### v2.0 — Planifié 📋
-- Prévision temporelle de la qualité de l'eau (LSTM ou Temporal Fusion Transformer)
-- Interface web temps réel (React + WebSocket)
-- Alertes automatiques
-- Explications SHAP en temps réel sur l'interface
-- Versionnement des runs avec horodatage
-
-### v3.0 — Vision long terme 🔭
-- Collecte de données géolocalisées
-- Adaptation du modèle par bassin versant
-- Boucle de rétroaction (mesure après filtration → réentraînement)
-- Déploiement sur Raspberry Pi / ESP32
-
----
-
-## 12. Contribuer
-
-### Workflow
-
-```bash
-# 1. Créer une branche
-git checkout -b feature/nom-de-la-feature
-
-# 2. Développer + tester
-python -m pytest tests/ -v
-
-# 3. Vérifier la qualité du code
-flake8 src/ --max-line-length=100
-black src/ --check
-
-# 4. Pull Request → review obligatoire
-```
-
-### Conventions
-
-- **Langue** : code en anglais, commentaires/docstrings en français
-- **Docstrings** : format NumPy (Parameters / Returns / Examples)
-- **Tests** : toute nouvelle fonction doit avoir au moins 3 tests unitaires
-- **config.py** : tout nouveau paramètre global passe par `config.py`
-- **Data leakage** : tout fit (scaler, imputer, resampler) se fait uniquement sur le train set
-
-### Variables d'environnement
-
-```bash
-# .env.example — copier en .env (non versionné)
-KAGGLE_USERNAME=
-KAGGLE_KEY=
-```
-
----
-
-## Dépendances principales
-
-```
-pandas>=2.0        numpy>=1.24        scikit-learn>=1.3
-xgboost>=2.0       lightgbm>=4.0      catboost>=1.2
-imbalanced-learn>=0.11    shap>=0.44
-matplotlib>=3.7    seaborn>=0.12      scipy>=1.10
-joblib>=1.3        fastapi>=0.100     uvicorn>=0.23
-python-dotenv>=1.0 kaggle>=1.5
-```
-
----
-
-<div align="center">
-
-**PLBD** — Système de Détection de la Potabilité de l'Eau  
-Licence MIT
-
-</div>
+MIT
