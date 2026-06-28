@@ -520,6 +520,33 @@
       z-index: 999;
     }
     #toast.show { transform: none; opacity: 1; }
+
+    /* ── Bandeau alerte ──────────────────────────────────────────────── */
+    .alert-banner {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: linear-gradient(90deg, #c0392b, #e74c3c);
+      color: #fff;
+      padding: .6rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 200;
+      animation: bannerSlide .3s ease;
+      box-shadow: 0 2px 12px rgba(0,0,0,.5);
+    }
+    @keyframes bannerSlide { from { transform: translateY(-100%); } to { transform: none; } }
+    .alert-banner-text { font-weight: 600; font-size: .9rem; }
+    .alert-banner-dismiss {
+      padding: .3rem .8rem;
+      border: 1px solid rgba(255,255,255,.4);
+      border-radius: 4px;
+      background: transparent;
+      color: #fff;
+      font-family: inherit;
+      font-size: .78rem;
+      cursor: pointer;
+    }
+    .alert-banner-dismiss:hover { background: rgba(255,255,255,.15); }
   </style>
 </head>
 <body>
@@ -836,8 +863,16 @@
 
     <!-- Diagnostics -->
     <div class="htab-panel active" id="htab-diag">
+      <!-- Graphique évolution -->
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-title">Évolution des paramètres capteurs</div>
+        <div class="charts-grid" id="histChartsGrid"></div>
+      </div>
       <div class="card">
-        <div class="card-title">Historique des diagnostics</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+          <div class="card-title" style="margin:0">Historique des diagnostics</div>
+          <button class="btn-select" onclick="exportCSV('diagnostic')">Exporter CSV</button>
+        </div>
         <div class="table-wrap">
           <table class="data-table" id="tableDiag">
             <thead>
@@ -857,7 +892,10 @@
     <!-- Filtrations -->
     <div class="htab-panel" id="htab-filtr">
       <div class="card">
-        <div class="card-title">Historique des filtrations</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+          <div class="card-title" style="margin:0">Historique des filtrations</div>
+          <button class="btn-select" onclick="exportCSV('filtration')">Exporter CSV</button>
+        </div>
         <div class="table-wrap">
           <table class="data-table" id="tableFiltr">
             <thead>
@@ -876,7 +914,10 @@
     <!-- Prévisions -->
     <div class="htab-panel" id="htab-fcast">
       <div class="card">
-        <div class="card-title">Historique des prévisions</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+          <div class="card-title" style="margin:0">Historique des prévisions</div>
+          <button class="btn-select" onclick="exportCSV('forecast')">Exporter CSV</button>
+        </div>
         <div class="table-wrap">
           <table class="data-table" id="tableFcast">
             <thead>
@@ -895,6 +936,12 @@
   </div>
 
 </main>
+
+<!-- Bandeau alerte eau non potable -->
+<div id="alertBanner" class="alert-banner" style="display:none">
+  <span class="alert-banner-text">Eau non potable détectée — Intervention recommandée</span>
+  <button class="alert-banner-dismiss" onclick="dismissAlertBanner()">Fermer</button>
+</div>
 
 <div id="toast"></div>
 
@@ -1056,6 +1103,9 @@ function updateDiagnostic(data) {
   document.getElementById('threshVal').textContent = 'Seuil : ' + (thresh * 100).toFixed(0) + '%';
   document.getElementById('inferTime').textContent =
     'Inférence : ' + (data.inference_time_ms || 0).toFixed(1) + ' ms';
+
+  // Notification eau non potable
+  handlePotabilityAlert(label);
 
   // Décision de filtration (depuis le FilterController backend)
   updateFilterDecision(data.filter_decision, data.potability_now);
@@ -1452,6 +1502,46 @@ function showToast(msg) {
 // INIT
 // ════════════════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════════════════
+// NOTIFICATION EAU NON POTABLE
+// ════════════════════════════════════════════════════════════════════════════
+let _lastPotLabel = '';
+let _alertDismissed = false;
+
+function handlePotabilityAlert(label) {
+  if (label === 'Non potable' && _lastPotLabel !== 'Non potable') {
+    _alertDismissed = false;
+    document.getElementById('alertBanner').style.display = '';
+    playAlertSound();
+  } else if (label === 'Potable') {
+    document.getElementById('alertBanner').style.display = 'none';
+  }
+  _lastPotLabel = label;
+}
+
+function dismissAlertBanner() {
+  document.getElementById('alertBanner').style.display = 'none';
+  _alertDismissed = true;
+}
+
+function playAlertSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [800, 0, 800, 0, 1000].forEach((freq, i) => {
+      if (freq === 0) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'square';
+      gain.gain.value = 0.08;
+      osc.start(ctx.currentTime + i * 0.15);
+      osc.stop(ctx.currentTime + i * 0.15 + 0.12);
+    });
+  } catch(_) {}
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // HISTORIQUES
 // ════════════════════════════════════════════════════════════════════════════
 function switchHistoryTab(name, btn) {
@@ -1467,14 +1557,21 @@ async function loadHistory() {
   await Promise.all([loadHistoryDiag(), loadHistoryFiltr(), loadHistoryFcast()]);
 }
 
+let _historyDiagData = [];
+let _historyFiltrData = [];
+let _historyFcastData = [];
+const _histCharts = {};
+
 async function loadHistoryDiag() {
   try {
     const r = await fetch('/api/history/diagnostic?limit=200');
     if (!r.ok) return;
     const rows = await r.json();
+    _historyDiagData = rows;
     const tbody = document.getElementById('tbodyDiag');
     if (!rows.length) {
       tbody.innerHTML = '<tr><td colspan="9" class="empty-msg">Aucun diagnostic enregistré</td></tr>';
+      document.getElementById('histChartsGrid').innerHTML = '<div style="color:var(--text-muted);font-size:.82rem;padding:1rem;text-align:center">Pas encore de données</div>';
       return;
     }
     tbody.innerHTML = rows.map(d => {
@@ -1492,7 +1589,83 @@ async function loadHistoryDiag() {
         <td>${d.threshold != null ? (d.threshold*100).toFixed(0)+'%' : '—'}</td>
       </tr>`;
     }).join('');
+    renderHistoryCharts(rows);
   } catch(_) {}
+}
+
+function renderHistoryCharts(rows) {
+  const grid = document.getElementById('histChartsGrid');
+  const chronological = [...rows].reverse();
+  const labels = chronological.map(d => (d.timestamp||'').replace('T',' ').slice(11, 16));
+  const params = [
+    { key: 'ph', label: 'pH', color: '#2E86AB', nm: NM.ph },
+    { key: 'solids', label: 'TDS (mg/L)', color: '#E84855', nm: NM.Solids },
+    { key: 'conductivity', label: 'Conductivité (µS/cm)', color: '#3BB273', nm: NM.Conductivity },
+    { key: 'turbidity', label: 'Turbidité (NTU)', color: '#F18F01', nm: NM.Turbidity },
+    { key: 'temperature', label: 'Température (°C)', color: '#7B2D8B', nm: NM.Temperature },
+  ];
+
+  if (grid.children.length !== params.length) {
+    grid.innerHTML = '';
+    params.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'chart-card';
+      div.innerHTML = `<div class="chart-header"><span class="chart-feat">${p.label}</span></div>
+        <canvas id="hc-${p.key}" class="chart-canvas"></canvas>`;
+      grid.appendChild(div);
+    });
+  }
+
+  params.forEach(p => {
+    const data = chronological.map(d => d[p.key]);
+    const ctx = document.getElementById('hc-' + p.key);
+    if (!ctx) return;
+
+    const datasets = [{
+      label: p.label,
+      data: data,
+      borderColor: p.color,
+      backgroundColor: p.color + '22',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0.3,
+      fill: true,
+    }];
+    if (p.nm) {
+      datasets.push({
+        label: 'Max NM',
+        data: data.map(() => p.nm.max),
+        borderColor: '#3fb95055',
+        borderDash: [4, 4],
+        borderWidth: 1,
+        pointRadius: 0,
+        fill: false,
+      });
+    }
+
+    if (_histCharts[p.key]) {
+      _histCharts[p.key].data.labels = labels;
+      _histCharts[p.key].data.datasets[0].data = data;
+      if (p.nm) _histCharts[p.key].data.datasets[1].data = data.map(() => p.nm.max);
+      _histCharts[p.key].update('none');
+    } else {
+      _histCharts[p.key] = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          animation: { duration: 300 },
+          plugins: { legend: { display: false },
+            tooltip: { backgroundColor: '#21262d', titleColor: '#e6edf3', bodyColor: '#8b949e',
+                       borderColor: '#30363d', borderWidth: 1 } },
+          scales: {
+            x: { ticks: { color: '#8b949e', font: { size: 8 }, maxTicksLimit: 6 }, grid: { color: '#21262d' } },
+            y: { ticks: { color: '#8b949e', font: { size: 8 } }, grid: { color: '#21262d' } },
+          },
+        },
+      });
+    }
+  });
 }
 
 async function loadHistoryFiltr() {
@@ -1500,6 +1673,7 @@ async function loadHistoryFiltr() {
     const r = await fetch('/api/history/filtration?limit=200');
     if (!r.ok) return;
     const rows = await r.json();
+    _historyFiltrData = rows;
     const tbody = document.getElementById('tbodyFiltr');
     if (!rows.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">Aucune filtration enregistrée</td></tr>';
@@ -1521,6 +1695,7 @@ async function loadHistoryFcast() {
     const r = await fetch('/api/history/forecast?limit=100');
     if (!r.ok) return;
     const rows = await r.json();
+    _historyFcastData = rows;
     const tbody = document.getElementById('tbodyFcast');
     if (!rows.length) {
       tbody.innerHTML = '<tr><td colspan="5" class="empty-msg">Aucune prévision enregistrée</td></tr>';
@@ -1534,6 +1709,47 @@ async function loadHistoryFcast() {
       <td>${d.n_alerts_info || 0}</td>
     </tr>`).join('');
   } catch(_) {}
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// EXPORT CSV
+// ════════════════════════════════════════════════════════════════════════════
+function exportCSV(type) {
+  let csv = '', filename = '';
+
+  if (type === 'diagnostic') {
+    if (!_historyDiagData.length) { showToast('Aucune donnée à exporter'); return; }
+    csv = 'Date,pH,TDS,Conductivite,Turbidite,Temperature,Resultat,Confiance,Seuil\n';
+    csv += _historyDiagData.map(d =>
+      `${d.timestamp},${d.ph},${d.solids},${d.conductivity},${d.turbidity},${d.temperature},${d.potability_label},${d.confidence},${d.threshold}`
+    ).join('\n');
+    filename = 'aquasens_diagnostics.csv';
+
+  } else if (type === 'filtration') {
+    if (!_historyFiltrData.length) { showToast('Aucune donnée à exporter'); return; }
+    csv = 'Date,Filtre,Raison,Duree_s,Active,Mode\n';
+    csv += _historyFiltrData.map(d =>
+      `${d.timestamp},"${d.filter_name}","${(d.reason||'').replace(/"/g,'""')}",${d.duration_s},${d.activated?1:0},${d.mock?'Mock':'GPIO'}`
+    ).join('\n');
+    filename = 'aquasens_filtrations.csv';
+
+  } else if (type === 'forecast') {
+    if (!_historyFcastData.length) { showToast('Aucune donnée à exporter'); return; }
+    csv = 'Date,Inference_ms,Critical,Warning,Info\n';
+    csv += _historyFcastData.map(d =>
+      `${d.timestamp},${d.inference_ms},${d.n_alerts_critical},${d.n_alerts_warning},${d.n_alerts_info}`
+    ).join('\n');
+    filename = 'aquasens_previsions.csv';
+  }
+
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Export CSV téléchargé');
 }
 
 // ════════════════════════════════════════════════════════════════════════════
