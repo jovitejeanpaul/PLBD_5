@@ -1,13 +1,13 @@
 from datetime import datetime, timedelta
 from typing import Optional
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-# Charger le .env
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")

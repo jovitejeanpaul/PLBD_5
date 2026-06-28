@@ -1,0 +1,32 @@
+# =====================================================
+# AQUA-SENS — Dépendances Raspberry Pi 4 (ARM64 Bullseye, Python 3.9)
+# =====================================================
+# Ce fichier contient UNIQUEMENT les dépendances nécessaires au runtime
+# embarqué. L'entraînement (tuning, train_model, explainability) se fait
+# sur PC avec requirements.txt complet.
+# =====================================================
+
+# Data & ML (inférence uniquement)
+numpy>=1.24.0,<2.1.0
+pandas>=2.0.0,<2.2.0
+scikit-learn>=1.3.0
+joblib>=1.3.0
+
+# Deep Learning — runtime ONNX (alternative légère à PyTorch)
+onnxruntime>=1.16.0
+
+# Web Backend
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+websockets>=12.0
+python-multipart>=0.0.9
+
+# Authentification
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0,<4.1.0
+python-dotenv>=1.0.0
+
+# Capteurs (Raspberry Pi uniquement)
+# adafruit-circuitpython-ads1x15
+# RPi.GPIO

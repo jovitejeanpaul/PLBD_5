@@ -235,6 +235,12 @@ THRESHOLD_TUNING = {
     "beta":1,
 }
 
+# Seuil de décision en production (Raspberry Pi).
+# Le tuning peut produire des seuils très bas (ex: 0.20) qui sont
+# trop agressifs sur des données capteur réelles. Cette valeur est
+# utilisée par sensor_inference.py via le ThresholdClassifier.
+DEFAULT_THRESHOLD: float = 0.5
+
 # ===========================================================================
 # VALIDATION CROISÉE
 # ===========================================================================
@@ -290,15 +296,39 @@ MODEL_SELECTION = {
     "model_prefix": "model_",
 }
 
-PHYSICAL_BOUNDS: dict[str, Tuple[float, float]] = {
-    "ph":           (0.0,  14.0),
-    "Solids":       (0.0,  10000.0),   
-    "Conductivity": (0.0,  15000.0),   
-    "Turbidity":    (0.0,  1000.0),   
-    "Temperature":  (-10.0,100.0)  
+# Relation empirique TDS ↔ Conductivity :  TDS (mg/L) ≈ k × EC (µS/cm)
+# k varie de 0.55 à 0.75 selon la composition ionique.
+# 0.67 retenu pour ce projet (valeur standard eau douce).
+TDS_EC_FACTOR: float = 0.67
+
+# ---------------------------------------------------------------------------
+# Bornes pour le nettoyage des données d'entraînement (Kaggle).
+# Strictes : le dataset Kaggle contient des valeurs TDS aberrantes
+# (jusqu'à 60 000 ppm pour EC < 1000 µS/cm). Ces bornes ramènent
+# les données dans un domaine réaliste pour l'eau de consommation.
+# Utilisées par data_processing.cap_outliers_iqr() et validate_dataframe().
+# ---------------------------------------------------------------------------
+TRAINING_BOUNDS: dict[str, Tuple[float, float]] = {
+    "ph":           (0.0,   14.0),
+    "Solids":       (0.0, 1000.0),
+    "Conductivity": (0.0, 1500.0),
+    "Turbidity":    (0.0,  100.0),
 }
 
-TDS_EC_FACTOR=0.67
+# ---------------------------------------------------------------------------
+# Bornes pour la validation capteur en production (Raspberry Pi).
+# Plus larges : acceptent les valeurs physiquement possibles même si
+# elles sortent de la plage eau potable. Le modèle décidera si l'eau
+# est potable ou non — ces bornes détectent uniquement les capteurs
+# défaillants (valeurs physiquement impossibles).
+# ---------------------------------------------------------------------------
+PHYSICAL_BOUNDS: dict[str, Tuple[float, float]] = {
+    "ph":           (0.0,    14.0),
+    "Solids":       (0.0, 10000.0),
+    "Conductivity": (0.0, 15000.0),
+    "Turbidity":    (0.0,  1000.0),
+    "Temperature":  (-10.0, 100.0),
+}
 
 # ===========================================================================
 # PARAMÈTRES D'AFFICHAGE DES FIGURES

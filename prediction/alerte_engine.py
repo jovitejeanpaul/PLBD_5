@@ -49,7 +49,13 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+import sys
+from pathlib import Path
+
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from config import TDS_EC_FACTOR
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +93,7 @@ MOROCCAN_STANDARDS: dict[str, dict] = {
         "label": "TDS (Solides dissous)",
         "norm":  "NM 03.7.001 §5.3",
     },
-    "temperature": {
+    "Temperature": {
         "min":   0.0,
         "max":   25.0,
         "unit":  "°C",
@@ -371,7 +377,7 @@ class AlertEngine:
         turb_arr = col("Turbidity")
         cond_arr = col("Conductivity")
         tds_arr  = col("Solids")
-        temp_arr = col("temperature")
+        temp_arr = col("Temperature")
 
         # ── Règle 1 : Contamination microbiologique probable ──────────────
         # Turbidité élevée + chute de pH => ruissellement de surface
@@ -453,9 +459,9 @@ class AlertEngine:
         if tds_arr is not None and cond_arr is not None:
             tds_rise  = tds_arr.max()  - tds_arr[0]
             cond_rise = cond_arr.max() - cond_arr[0]
-            # Ratio attendu : TDS ≈ Conductivité × 0.67 (TDS_EC_FACTOR)
+            # Ratio attendu : TDS ≈ Conductivité × TDS_EC_FACTOR
             # Si TDS augmente bien plus vite que prévu par la conductivité => anomalie
-            expected_tds_rise = cond_rise * 0.67
+            expected_tds_rise = cond_rise * TDS_EC_FACTOR
             if tds_rise > expected_tds_rise + 50:
                 h_onset = int(np.argmax(tds_arr)) + 1
                 alerts.append(Alert(
@@ -484,7 +490,7 @@ class AlertEngine:
                 alerts.append(Alert(
                     level      = AlertLevel.WARNING,
                     category   = AlertCategory.COMBINED,
-                    feature    = "temperature",
+                    feature    = "Temperature",
                     message    = "Température favorable à la prolifération microbienne",
                     detail     = (
                         f"Température prévue > 22°C pendant {hot_hours}h consécutives. "

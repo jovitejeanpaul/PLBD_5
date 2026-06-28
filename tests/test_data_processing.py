@@ -38,7 +38,7 @@ from src.data_processing import (
     FEATURES,
     KAGGLE_CSV_FILENAME,
     KAGGLE_DATASET_SLUG,
-    PHYSICAL_BOUNDS,
+    TRAINING_BOUNDS,
     TARGET,
     TDS_EC_FACTOR,
     cap_outliers_iqr,
@@ -70,8 +70,8 @@ class TestConstants:
         # Chaque feature doit avoir une borne physique définie,
         # sans quoi cap_outliers_iqr(enforce_physical=True) l'ignore silencieusement.
         for col in FEATURES:
-            assert col in PHYSICAL_BOUNDS
-            low, high = PHYSICAL_BOUNDS[col]
+            assert col in TRAINING_BOUNDS
+            low, high = TRAINING_BOUNDS[col]
             assert low < high
 
     def test_tds_ec_factor_in_oms_range(self):
@@ -413,7 +413,7 @@ class TestCapOutliersIQR:
             enforce_physical=True,
         )
         for col in ["Solids", "Conductivity", "Turbidity"]:
-            low, high = PHYSICAL_BOUNDS[col]
+            low, high = TRAINING_BOUNDS[col]
             assert out[col].between(low, high).all()
 
 
@@ -515,7 +515,7 @@ class TestRawDataProcessing:
 
         assert not out[ALL_COLS].isnull().any().any()
         for col in FEATURES:
-            low, high = PHYSICAL_BOUNDS[col]
+            low, high = TRAINING_BOUNDS[col]
             assert out[col].between(low, high).all()
 
     def test_return_x_y(self, raw_csv_path):

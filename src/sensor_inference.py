@@ -67,9 +67,10 @@ from threshold_classifier import ThresholdClassifier  # noqa: F401
 
 # Constantes Pi-compatibles : on tente config.py (complet), sinon valeurs locales
 try:
-    from config import FEATURES, PATHS, PHYSICAL_BOUNDS, TDS_EC_FACTOR
+    from config import DEFAULT_THRESHOLD, FEATURES, PATHS, PHYSICAL_BOUNDS, TDS_EC_FACTOR
 except ImportError:
     logger.warning("config.py indisponible — utilisation des constantes embarquées.")
+    DEFAULT_THRESHOLD = 0.5
     FEATURES = ["ph", "Solids", "Conductivity", "Turbidity"]
     PATHS = {"models": Path("outputs/models")}
     PHYSICAL_BOUNDS = {
@@ -289,6 +290,11 @@ class SensorPipeline:
     """
     Pipeline diagnostic : capteurs → scaling → prédiction potabilité.
 
+    Le seuil de décision est porté par le ThresholdClassifier (dans le
+    .joblib). ``from_saved_models`` le force à ``DEFAULT_THRESHOLD``
+    (config.py) pour éviter qu'un seuil trop agressif issu du tuning
+    ne fausse les résultats en production.
+
     Parameters
     ----------
     model :
@@ -297,16 +303,12 @@ class SensorPipeline:
         RobustScaler chargé depuis scaler.joblib.
     sensor_reader :
         ADS1115Reader ou MockSensorReader.
-    threshold : float
-        Seuil de décision. Présent pour surcharge manuelle uniquement —
-        le ThresholdClassifier contient déjà le seuil intégré.
     """
 
-    def __init__(self, model, scaler, sensor_reader=None, threshold: float = 0.5):
+    def __init__(self, model, scaler, sensor_reader=None):
         self.model     = model
         self.scaler    = scaler
         self.reader    = sensor_reader or get_sensor_reader()
-        self.threshold = threshold
 
     @classmethod
     def from_saved_models(
@@ -316,6 +318,9 @@ class SensorPipeline:
     ) -> "SensorPipeline":
         """
         Charge les modèles depuis le disque et instancie le pipeline.
+
+        Le seuil du ThresholdClassifier est forcé à ``DEFAULT_THRESHOLD``
+        (config.py) pour la production.
 
         Parameters
         ----------
@@ -336,14 +341,15 @@ class SensorPipeline:
         model  = joblib.load(candidates[0])
         scaler = joblib.load(d / "scaler.joblib")
 
-        threshold = 0.5
+        if hasattr(model, "threshold"):
+            model.threshold = DEFAULT_THRESHOLD
+
         logger.info(
             "Modèle chargé : %s | seuil=%.3f",
-            candidates[0].name, threshold,
+            candidates[0].name, getattr(model, "threshold", 0.5),
         )
         return cls(model, scaler,
-                   sensor_reader=get_sensor_reader(mock=mock),
-                   threshold=threshold)
+                   sensor_reader=get_sensor_reader(mock=mock))
 
     def run_once(self) -> dict[str, Any]:
         """
@@ -375,12 +381,13 @@ class SensorPipeline:
         if out_of_bounds:
             logger.warning("Valeurs hors bornes : %s", out_of_bounds)
 
-        # Inférence diagnostic — température exclue volontairement (réservée au modèle de prédiction)
+        # Inférence diagnostic — température exclue (réservée au modèle de prédiction)
         x        = np.array([[raw[f] for f in FEATURES]])
         x_scaled = self.scaler.transform(x)
+        pred     = int(self.model.predict(x_scaled)[0])
         proba    = float(self.model.predict_proba(x_scaled)[0][1])
-        pred     = int(proba >= self.threshold)  # seuil 0.5 appliqué manuellement
         label    = "Non potable" if pred == 1 else "Potable"
+        threshold = getattr(self.model, "threshold", 0.5)
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
@@ -390,6 +397,7 @@ class SensorPipeline:
             "potability_now":    pred,
             "potability_label":  label,
             "confidence_proba":  round(proba, 4),
+            "threshold":         threshold,
             "out_of_bounds":     out_of_bounds,
             "inference_time_ms": round(elapsed_ms, 2),
         }

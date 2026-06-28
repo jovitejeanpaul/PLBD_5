@@ -3,213 +3,226 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>AQUA-SENS - Connexion</title>
-
+<title>AQUA-SENS — Connexion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:Segoe UI,Arial,sans-serif;
-}
+  :root {
+    --navy:    #0A2342;
+    --ocean:   #065A82;
+    --teal:    #1C7293;
+    --mint:    #02C39A;
+    --bg:      #0d1117;
+    --bg2:     #161b22;
+    --bg3:     #21262d;
+    --border:  #30363d;
+    --text:    #e6edf3;
+    --text-muted: #8b949e;
+    --red:     #f85149;
+    --radius:  10px;
+  }
 
-body{
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
 
-    height:100vh;
+  .login-container {
+    width: 100%;
+    max-width: 400px;
+    padding: 0 1.5rem;
+  }
 
-    display:flex;
+  .logo-block {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  .logo-icon {
+    width: 56px; height: 56px;
+    background: var(--mint);
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    margin-bottom: .75rem;
+  }
+  .logo-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: .06em;
+  }
+  .logo-subtitle {
+    font-size: .82rem;
+    color: var(--text-muted);
+    margin-top: .3rem;
+  }
 
-    justify-content:center;
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,.4);
+  }
 
-    align-items:center;
+  .card h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    color: var(--text);
+  }
 
-    background:linear-gradient(135deg,#0F4C75,#3282B8,#BBE1FA);
+  .field {
+    margin-bottom: 1.25rem;
+  }
+  .field label {
+    display: block;
+    font-size: .78rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: .4rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+  .field input {
+    width: 100%;
+    padding: .7rem .9rem;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: .9rem;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .field input:focus {
+    border-color: var(--mint);
+  }
+  .field input::placeholder {
+    color: #555;
+  }
 
-}
+  .btn-login {
+    width: 100%;
+    padding: .75rem;
+    border: none;
+    border-radius: 6px;
+    background: var(--mint);
+    color: var(--navy);
+    font-family: inherit;
+    font-size: .95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .btn-login:hover { background: #03d9ab; }
+  .btn-login:disabled { opacity: .5; cursor: not-allowed; }
 
-.card{
+  .error-msg {
+    color: var(--red);
+    font-size: .82rem;
+    text-align: center;
+    margin-top: 1rem;
+    min-height: 1.2em;
+  }
 
-    width:380px;
-
-    background:white;
-
-    border-radius:15px;
-
-    padding:40px;
-
-    box-shadow:0 10px 35px rgba(0,0,0,.25);
-
-}
-
-h1{
-
-    color:#0F4C75;
-
-    text-align:center;
-
-    margin-bottom:10px;
-
-}
-
-.subtitle{
-
-    text-align:center;
-
-    color:#666;
-
-    margin-bottom:30px;
-
-}
-
-input{
-
-    width:100%;
-
-    padding:14px;
-
-    margin-bottom:18px;
-
-    border:1px solid #ccc;
-
-    border-radius:8px;
-
-    font-size:15px;
-
-}
-
-button{
-
-    width:100%;
-
-    padding:14px;
-
-    border:none;
-
-    border-radius:8px;
-
-    cursor:pointer;
-
-    background:#0F4C75;
-
-    color:white;
-
-    font-size:16px;
-
-    transition:.3s;
-
-}
-
-button:hover{
-
-    background:#3282B8;
-
-}
-
-#error{
-
-    color:red;
-
-    margin-top:15px;
-
-    text-align:center;
-
-}
-
+  .footer-text {
+    text-align: center;
+    font-size: .72rem;
+    color: var(--text-muted);
+    margin-top: 1.5rem;
+  }
 </style>
-
 </head>
-
 <body>
 
-<div class="card">
+<div class="login-container">
 
-<h1>AQUA-SENS</h1>
+  <div class="logo-block">
+    <div class="logo-icon">💧</div>
+    <div class="logo-title">AQUA-SENS</div>
+    <div class="logo-subtitle">Système intelligent de surveillance de la qualité de l'eau</div>
+  </div>
 
-<div class="subtitle">
+  <div class="card">
+    <h2>Connexion</h2>
 
-Interface sécurisée
+    <div class="field">
+      <label for="username">Nom d'utilisateur</label>
+      <input id="username" type="text" placeholder="Entrez votre identifiant" autofocus>
+    </div>
 
-</div>
+    <div class="field">
+      <label for="password">Mot de passe</label>
+      <input id="password" type="password" placeholder="Entrez votre mot de passe">
+    </div>
 
-<input
-id="username"
-placeholder="Nom d'utilisateur"
->
+    <button class="btn-login" id="btnLogin" onclick="login()">Se connecter</button>
 
-<input
-id="password"
-type="password"
-placeholder="Mot de passe"
->
+    <div class="error-msg" id="error"></div>
+  </div>
 
-<button onclick="login()">
-
-Se connecter
-
-</button>
-
-<div id="error"></div>
+  <div class="footer-text">
+    École Centrale Casablanca — PLBD
+  </div>
 
 </div>
 
 <script>
+async function login() {
+  const btn   = document.getElementById('btnLogin');
+  const error = document.getElementById('error');
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
 
-async function login(){
+  error.textContent = '';
 
-    const username=document.getElementById("username").value;
+  if (!username || !password) {
+    error.textContent = 'Veuillez remplir tous les champs.';
+    return;
+  }
 
-    const password=document.getElementById("password").value;
+  btn.disabled = true;
+  btn.textContent = 'Connexion…';
 
-    const response=await fetch("/login",{
-
-        method:"POST",
-
-        headers:{
-
-            "Content-Type":"application/json"
-
-        },
-
-        body:JSON.stringify({
-
-            username,
-
-            password
-
-        })
-
+  try {
+    const response = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
     });
 
-    if(response.ok){
-
-        const data=await response.json();
-
-        localStorage.setItem(
-
-            "token",
-
-            data.access_token
-
-        );
-
-        window.location="/";
-
+    if (response.ok) {
+      window.location = '/';
+    } else {
+      const data = await response.json();
+      error.textContent = data.detail || 'Identifiants incorrects.';
     }
-
-    else{
-
-        document.getElementById("error").innerText=
-
-        "Nom d'utilisateur ou mot de passe incorrect.";
-
-    }
-
+  } catch(e) {
+    error.textContent = 'Erreur de connexion au serveur.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Se connecter';
+  }
 }
 
+document.getElementById('password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') login();
+});
+document.getElementById('username').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('password').focus();
+});
 </script>
-
 </body>
-
 </html>

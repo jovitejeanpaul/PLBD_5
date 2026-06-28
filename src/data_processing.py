@@ -53,18 +53,8 @@ FEATURES = ["ph", "Solids", "Conductivity", "Turbidity"]
 TARGET = "Potability"
 ALL_COLS = FEATURES + [TARGET]
 
-# Bornes physiques raisonnables pour chaque feature (domaine eau potable/naturelle)
-PHYSICAL_BOUNDS: dict[str, Tuple[float, float]] = {
-    "ph":           (0.0,  14.0),
-    "Solids":       (0.0,  1000.0),   # mg/L — TDS eau douce / saumâtre
-    "Conductivity": (0.0,  1500.0),    # µS/cm — eau douce à légèrement minéralisée
-    "Turbidity":    (0.0,  100.0),      # NTU
-}
-
-# Relation empirique TDS ↔ Conductivity :  TDS (mg/L) ≈ k × EC (µS/cm)
-# Le facteur k varie de 0.55 à 0.75 selon la composition ionique ;
-# 0.64 est la valeur standard retenue par l'OMS pour l'eau potable.
-TDS_EC_FACTOR: float = 0.64
+# Bornes et facteur TDS/EC importés depuis la source unique (config.py)
+from config import TRAINING_BOUNDS, TDS_EC_FACTOR
 
 
 # ===========================================================================
@@ -391,7 +381,7 @@ def cap_outliers_iqr(
 
     Pour chaque colonne, les valeurs inférieures à ``lower`` sont remplacées
     par ``lower`` et celles supérieures à ``upper`` par ``upper``.
-    Optionnellement, les bornes physiques de :data:`PHYSICAL_BOUNDS` sont
+    Optionnellement, les bornes physiques de :data:`TRAINING_BOUNDS` sont
     également appliquées pour éviter des valeurs physiquement impossibles.
 
     Parameters
@@ -403,7 +393,7 @@ def cap_outliers_iqr(
     factor : float, optional
         Multiplicateur IQR. Par défaut 1.5.
     enforce_physical : bool, optional
-        Si True, clip également selon :data:`PHYSICAL_BOUNDS`. Par défaut True.
+        Si True, clip également selon :data:`TRAINING_BOUNDS`. Par défaut True.
 
     Returns
     -------
@@ -424,8 +414,8 @@ def cap_outliers_iqr(
         upper = q3 + factor * iqr
 
         # Appliquer les bornes physiques si demandé
-        if enforce_physical and col in PHYSICAL_BOUNDS:
-            phys_low, phys_high = PHYSICAL_BOUNDS[col]
+        if enforce_physical and col in TRAINING_BOUNDS:
+            phys_low, phys_high = TRAINING_BOUNDS[col]
             lower = max(lower, phys_low)
             upper = min(upper, phys_high)
 
@@ -503,7 +493,7 @@ def validate_dataframe(df: pd.DataFrame) -> None:
 
     Contrôles effectués :
     - Absence de valeurs manquantes dans les features et la cible.
-    - Respect des bornes physiques de :data:`PHYSICAL_BOUNDS`.
+    - Respect des bornes physiques de :data:`TRAINING_BOUNDS`.
     - Distribution de la cible (équilibre des classes).
 
     Parameters
@@ -526,7 +516,7 @@ def validate_dataframe(df: pd.DataFrame) -> None:
 
     # Bornes physiques
     violations = []
-    for col, (low, high) in PHYSICAL_BOUNDS.items():
+    for col, (low, high) in TRAINING_BOUNDS.items():
         if col not in df.columns:
             continue
         out_of_bounds = ((df[col] < low) | (df[col] > high)).sum()

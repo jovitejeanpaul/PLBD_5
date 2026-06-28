@@ -15,7 +15,7 @@ from __future__ import annotations
 import torch.nn as nn
 
 # ── Constantes partagées ────────────────────────────────────────────────────
-FEATURES     : list[str] = ["ph", "Solids", "Conductivity", "Turbidity", "temperature"]
+FEATURES     : list[str] = ["ph", "Solids", "Conductivity", "Turbidity", "Temperature"]
 N_FEATURES   : int       = len(FEATURES)   # 5
 WINDOW_SIZE  : int       = 24              # heures passées utilisées comme entrée
 HORIZON      : int       = 24              # heures à prédire en avance

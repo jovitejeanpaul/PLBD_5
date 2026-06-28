@@ -77,6 +77,27 @@
       0%,100% { opacity:1; } 50% { opacity:.4; }
     }
     .last-update { font-size: .72rem; color: var(--text-muted); font-family: 'JetBrains Mono'; }
+    .role-badge {
+      font-size: .72rem;
+      padding: .2rem .6rem;
+      border-radius: 1rem;
+      background: var(--bg3);
+      color: var(--mint);
+      border: 1px solid var(--border);
+      font-weight: 600;
+    }
+    .btn-logout {
+      padding: .4rem .9rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: .75rem;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-logout:hover { color: var(--red); border-color: var(--red); }
 
     /* ── Tabs ────────────────────────────────────────────────────────── */
     .tabs {
@@ -175,10 +196,11 @@
     .sensors-grid {
       grid-column: 1 / -1;
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: .75rem;
     }
-    @media (max-width: 700px) { .sensors-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 900px) { .sensors-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 600px) { .sensors-grid { grid-template-columns: repeat(2, 1fr); } }
 
     .sensor-card {
       background: var(--bg3);
@@ -220,6 +242,7 @@
     }
     .filter-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
     .filter-ok   { background: var(--green); }
+    .filter-crit { background: var(--red); }
     .filter-warn { background: var(--orange); }
     .filter-info { background: var(--teal); }
     .filter-title { font-weight: 600; color: var(--text); }
@@ -306,6 +329,160 @@
       color: var(--green); font-size: .9rem;
     }
 
+    /* ── Historiques ────────────────────────────────────────────────── */
+    .history-tabs {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      margin-bottom: 1rem;
+    }
+    .htab-btn {
+      padding: .45rem .9rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: .82rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .htab-btn.active { background: var(--ocean); color: #fff; border-color: var(--ocean); }
+    .htab-btn:hover:not(.active) { color: var(--text); border-color: var(--text-muted); }
+    .htab-panel { display: none; }
+    .htab-panel.active { display: block; }
+
+    .table-wrap { overflow-x: auto; }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .8rem;
+    }
+    .data-table th {
+      text-align: left;
+      padding: .5rem .6rem;
+      background: var(--bg3);
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      font-size: .7rem;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .data-table td {
+      padding: .45rem .6rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .data-table tbody tr:hover { background: rgba(2,195,154,.04); }
+    .empty-msg { color: var(--text-muted); text-align: center; font-style: italic; }
+    .data-table tr.row-active { background: rgba(2,195,154,.08); }
+    .data-table tr.row-active td:first-child { border-left: 3px solid var(--mint); }
+    .btn-select {
+      padding: .25rem .6rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: .72rem;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-select:hover { border-color: var(--mint); color: var(--mint); }
+    .btn-select.active-model {
+      background: var(--mint);
+      color: var(--navy);
+      border-color: var(--mint);
+      font-weight: 600;
+      cursor: default;
+    }
+    .badge-pot {
+      padding: .15rem .5rem;
+      border-radius: 1rem;
+      font-size: .7rem;
+      font-weight: 600;
+    }
+    .badge-pot-ok   { background: rgba(63,185,80,.15); color: var(--green); }
+    .badge-pot-nok  { background: rgba(248,81,73,.15); color: var(--red); }
+
+    /* ── Accueil ─────────────────────────────────────────────────────── */
+    .home-hero {
+      text-align: center;
+      padding: 2rem 1rem 1.5rem;
+    }
+    .home-hero h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: .6rem;
+    }
+    .home-desc {
+      font-size: .9rem;
+      color: var(--text-muted);
+      max-width: 640px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+    .home-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 700px) { .home-grid { grid-template-columns: 1fr; } }
+    .home-card {
+      cursor: pointer;
+      transition: border-color .2s, transform .15s;
+      display: flex;
+      flex-direction: column;
+      gap: .6rem;
+    }
+    .home-card:hover {
+      border-color: var(--mint);
+      transform: translateY(-2px);
+    }
+    .home-card-icon {
+      width: 40px; height: 40px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem;
+    }
+    .home-card-title {
+      font-size: .95rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .home-card-desc {
+      font-size: .82rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: .5rem;
+    }
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      font-size: .82rem;
+      color: var(--text-muted);
+      padding: .4rem .6rem;
+      background: var(--bg3);
+      border-radius: 6px;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      flex-shrink: 0;
+    }
+    .status-dot.ok { background: var(--green); }
+
     /* ── Spinner ─────────────────────────────────────────────────────── */
     .spinner {
       width: 20px; height: 20px;
@@ -348,22 +525,113 @@
       <span id="wsLabel">Déconnecté</span>
     </div>
     <div class="last-update" id="lastUpdate">—</div>
+    <span class="role-badge" id="userRole">—</span>
+    <button class="btn-logout" onclick="logout()">Déconnexion</button>
   </div>
 </header>
 
 <!-- ── Tabs ───────────────────────────────────────────────────────────────── -->
 <div class="tabs">
-  <button class="tab-btn active" onclick="switchTab('diagnostic')">⚡ Diagnostic temps réel</button>
-  <button class="tab-btn"        onclick="switchTab('forecast')">📈 Prévision 24h &amp; Alertes</button>
+  <button class="tab-btn active" onclick="switchTab('home', this)">Accueil</button>
+  <button class="tab-btn"        onclick="switchTab('diagnostic', this)">Diagnostic temps réel</button>
+  <button class="tab-btn"        onclick="switchTab('forecast', this)">Prévision 24h &amp; Alertes</button>
+  <button class="tab-btn"        onclick="switchTab('history', this)">Historiques</button>
 </div>
 
 <!-- ── Main ───────────────────────────────────────────────────────────────── -->
 <main>
 
   <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- TAB 1 : DIAGNOSTIC                                                  -->
+  <!-- ACCUEIL                                                              -->
   <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <div class="tab-panel active" id="panel-diagnostic">
+  <div class="tab-panel active" id="panel-home">
+
+    <div class="home-hero">
+      <h1>Bienvenue sur AQUA-SENS</h1>
+      <p class="home-desc">
+        Système intelligent de surveillance, diagnostic et prévision de la qualité de l'eau.
+        Conçu pour les contextes à ressources limitées — capteurs bas coût, IA embarquée, filtration automatisée.
+      </p>
+    </div>
+
+    <div class="home-grid">
+
+      <div class="card home-card" onclick="switchTab('diagnostic', document.querySelectorAll('.tab-btn')[1])">
+        <div class="home-card-icon" style="background:var(--ocean)">⚡</div>
+        <div class="home-card-title">Diagnostic temps réel</div>
+        <div class="home-card-desc">
+          Classification potable / non potable à partir des 4 capteurs (pH, TDS, conductivité, turbidité).
+          Résultat instantané avec indice de confiance et recommandations de filtration.
+        </div>
+      </div>
+
+      <div class="card home-card" onclick="switchTab('forecast', document.querySelectorAll('.tab-btn')[2])">
+        <div class="home-card-icon" style="background:var(--teal)">📈</div>
+        <div class="home-card-title">Prévision 24h &amp; Alertes</div>
+        <div class="home-card-desc">
+          Modèle LSTM prédit l'évolution des paramètres sur 24 heures.
+          Alertes préventives basées sur la norme marocaine NM 03.7.001 pour anticiper les interventions.
+        </div>
+      </div>
+
+      <div class="card home-card">
+        <div class="home-card-icon" style="background:var(--mint)">🔧</div>
+        <div class="home-card-title">Filtration automatisée</div>
+        <div class="home-card-desc">
+          3 filtres spécialisés (sédiments, charbon compressé, charbon actif) activés automatiquement
+          selon le diagnostic. Contrôle via GPIO sur Raspberry Pi 4.
+        </div>
+      </div>
+
+      <div class="card home-card">
+        <div class="home-card-icon" style="background:#7B2D8B">🧠</div>
+        <div class="home-card-title">Explicabilité SHAP</div>
+        <div class="home-card-desc">
+          Importance de chaque capteur dans la décision du modèle.
+          Résumé global pré-calculé, consultable en temps réel sur l'interface.
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Performances des modèles -->
+    <div class="card" style="margin-top:1rem">
+      <div class="card-title">Performances des modèles de diagnostic</div>
+      <div class="table-wrap">
+        <table class="data-table" id="tableModels">
+          <thead>
+            <tr>
+              <th>Rang</th><th>Modèle</th><th>Composite</th><th>ROC-AUC</th>
+              <th>G-mean</th><th>F1</th><th>Recall</th><th>Précision</th>
+              <th>Accuracy</th><th>MCC</th><th>Seuil tuné</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyModels">
+            <tr><td colspan="12" class="empty-msg">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="model-status" id="modelStatus" style="font-size:.78rem;color:var(--text-muted);margin-top:.5rem"></div>
+    </div>
+
+    <!-- État des modules -->
+    <div class="card" style="margin-top:1rem">
+      <div class="card-title">État du système</div>
+      <div class="status-grid" id="statusGrid">
+        <div class="status-item"><span class="status-dot" id="dot-diag"></span> Modèle de diagnostic</div>
+        <div class="status-item"><span class="status-dot" id="dot-lstm"></span> Modèle de prévision (LSTM)</div>
+        <div class="status-item"><span class="status-dot" id="dot-alert"></span> Moteur d'alertes</div>
+        <div class="status-item"><span class="status-dot" id="dot-filter"></span> Contrôleur de filtration</div>
+        <div class="status-item"><span class="status-dot" id="dot-shap"></span> Résumé SHAP</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- DIAGNOSTIC                                                          -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div class="tab-panel" id="panel-diagnostic">
     <div class="diag-grid">
 
       <!-- Potabilité -->
@@ -412,6 +680,12 @@
           <div class="sensor-unit">NTU &nbsp; NM : ≤ 5</div>
           <div class="sensor-norm norm-ok" id="norm-Turbidity">—</div>
         </div>
+        <div class="sensor-card" id="card-Temperature">
+          <div class="sensor-name">Température</div>
+          <div class="sensor-value" id="val-Temperature">—</div>
+          <div class="sensor-unit">°C &nbsp; NM : ≤ 25</div>
+          <div class="sensor-norm norm-ok" id="norm-Temperature">—</div>
+        </div>
       </div>
 
       <!-- SHAP -->
@@ -434,6 +708,10 @@
             </div>
           </li>
         </ul>
+        <button class="btn btn-primary" id="btnActivate" onclick="activateFilters()" style="margin-top:.75rem;display:none">
+          Activer la filtration
+        </button>
+        <div class="filter-status" id="filterStatus" style="font-size:.78rem;color:var(--text-muted);margin-top:.4rem"></div>
       </div>
 
     </div>
@@ -478,6 +756,78 @@
 
   </div>
 
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- HISTORIQUES                                                         -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div class="tab-panel" id="panel-history">
+
+    <div class="history-tabs">
+      <button class="htab-btn active" onclick="switchHistoryTab('diag', this)">Diagnostics</button>
+      <button class="htab-btn"        onclick="switchHistoryTab('filtr', this)">Filtrations</button>
+      <button class="htab-btn"        onclick="switchHistoryTab('fcast', this)">Prévisions</button>
+      <button class="btn btn-primary" onclick="loadHistory()" style="margin-left:auto;font-size:.78rem;padding:.4rem .8rem">Actualiser</button>
+    </div>
+
+    <!-- Diagnostics -->
+    <div class="htab-panel active" id="htab-diag">
+      <div class="card">
+        <div class="card-title">Historique des diagnostics</div>
+        <div class="table-wrap">
+          <table class="data-table" id="tableDiag">
+            <thead>
+              <tr>
+                <th>Date</th><th>pH</th><th>TDS</th><th>Cond.</th><th>Turb.</th><th>Temp.</th>
+                <th>Résultat</th><th>Confiance</th><th>Seuil</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyDiag">
+              <tr><td colspan="9" class="empty-msg">Chargement…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filtrations -->
+    <div class="htab-panel" id="htab-filtr">
+      <div class="card">
+        <div class="card-title">Historique des filtrations</div>
+        <div class="table-wrap">
+          <table class="data-table" id="tableFiltr">
+            <thead>
+              <tr>
+                <th>Date</th><th>Filtre</th><th>Raison</th><th>Durée (s)</th><th>Activé</th><th>Mode</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyFiltr">
+              <tr><td colspan="6" class="empty-msg">Chargement…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prévisions -->
+    <div class="htab-panel" id="htab-fcast">
+      <div class="card">
+        <div class="card-title">Historique des prévisions</div>
+        <div class="table-wrap">
+          <table class="data-table" id="tableFcast">
+            <thead>
+              <tr>
+                <th>Date</th><th>Inférence</th><th>CRITICAL</th><th>WARNING</th><th>INFO</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyFcast">
+              <tr><td colspan="5" class="empty-msg">Chargement…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
 </main>
 
 <div id="toast"></div>
@@ -491,31 +841,43 @@ const NM = {
   Solids:       { min: 0,    max: 1500  },
   Conductivity: { min: 0,    max: 2700  },
   Turbidity:    { min: 0,    max: 5     },
-  temperature:  { min: 0,    max: 25    },
+  Temperature:  { min: 0,    max: 25    },
 };
 const FEAT_LABELS = {
   ph: 'pH', Solids: 'TDS', Conductivity: 'Conductivité',
-  Turbidity: 'Turbidité', temperature: 'Température',
+  Turbidity: 'Turbidité', Temperature: 'Température',
 };
 const FEAT_UNITS = {
-  ph: '', Solids: 'mg/L', Conductivity: 'µS/cm', Turbidity: 'NTU', temperature: '°C',
+  ph: '', Solids: 'mg/L', Conductivity: 'µS/cm', Turbidity: 'NTU',
+  Temperature: '°C',
 };
 const PALETTE = ['#2E86AB','#E84855','#3BB273','#F18F01','#7B2D8B'];
-const FILTER_DB = {
-  Turbidity:    { title: 'Filtre à sédiments activé',       desc: 'Turbidité élevée — retirer les particules en suspension.', level: 'warn' },
-  ph:           { title: 'Filtre à charbon actif conseillé', desc: 'pH hors norme — adsorption des composés acides/basiques.',  level: 'warn' },
-  Solids:       { title: 'Filtre à charbon compressé conseillé', desc: 'TDS élevé — réduction des solides dissous et métaux.',   level: 'warn' },
-  Conductivity: { title: 'Filtre à charbon compressé conseillé', desc: 'Minéralisation excessive — traitement des ions dissous.', level: 'warn' },
-};
+
+// ════════════════════════════════════════════════════════════════════════════
+// RÔLE UTILISATEUR
+// ════════════════════════════════════════════════════════════════════════════
+let userRole = 'operator';
+
+async function loadUserRole() {
+  try {
+    const r = await fetch('/me');
+    if (!r.ok) { window.location = '/login'; return; }
+    const d = await r.json();
+    userRole = d.role || 'operator';
+    document.getElementById('userRole').textContent =
+      userRole === 'administrator' ? 'Admin' : 'Opérateur';
+  } catch(_) {}
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // NAVIGATION TABS
 // ════════════════════════════════════════════════════════════════════════════
-function switchTab(name) {
+function switchTab(name, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('panel-' + name).classList.add('active');
-  event.target.classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (name === 'history' && !_historyLoaded) loadHistory();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -540,14 +902,24 @@ function connectWS() {
     if (data.type === 'diagnostic') updateDiagnostic(data);
   };
 
-  ws.onclose = () => {
+  ws.onclose = (e) => {
     document.getElementById('wsDot').classList.remove('connected');
+    if (e.code === 4001) {
+      document.getElementById('wsLabel').textContent = 'Session expirée';
+      window.location = '/login';
+      return;
+    }
     document.getElementById('wsLabel').textContent = 'Reconnexion…';
     setTimeout(connectWS, wsRetryDelay);
     wsRetryDelay = Math.min(wsRetryDelay * 1.5, 30000);
   };
 
   ws.onerror = () => ws.close();
+}
+
+async function logout() {
+  await fetch('/logout', { method: 'POST' });
+  window.location = '/login';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -561,11 +933,13 @@ function updateDiagnostic(data) {
   // Capteurs
   const raw = data.raw_values || {};
   const oob = data.out_of_bounds || [];
-  ['ph', 'Solids', 'Conductivity', 'Turbidity'].forEach(feat => {
+  ['ph', 'Solids', 'Conductivity', 'Turbidity', 'Temperature'].forEach(feat => {
     const v = raw[feat];
     if (v === undefined) return;
     document.getElementById('val-' + feat).textContent =
       feat === 'Solids' ? Math.round(v) : v.toFixed(feat === 'ph' ? 2 : 1);
+
+    if (!NM[feat]) return;
 
     const nm     = NM[feat];
     const card   = document.getElementById('card-' + feat);
@@ -617,44 +991,97 @@ function updateDiagnostic(data) {
   document.getElementById('inferTime').textContent =
     'Inférence : ' + (data.inference_time_ms || 0).toFixed(1) + ' ms';
 
-  // Recommandations filtration
-  updateFilterReco(oob);
+  // Décision de filtration (depuis le FilterController backend)
+  updateFilterDecision(data.filter_decision, data.potability_now);
 }
 
-function updateFilterReco(oob) {
+function updateFilterDecision(decision, potabilityNow) {
   const list = document.getElementById('filterList');
-  if (!oob || oob.length === 0) {
-    list.innerHTML = `
+  const btn  = document.getElementById('btnActivate');
+
+  if (!decision || decision.filter_to_activate === null) {
+    // Eau potable ou pas de décision
+    let html = `
       <li class="filter-item">
         <div class="filter-dot filter-ok"></div>
         <div>
-          <div class="filter-title">Aucune action requise</div>
-          <div class="filter-desc">Tous les paramètres sont conformes à la norme NM 03.7.001.</div>
+          <div class="filter-title">${decision ? decision.reason : 'En attente de données capteurs'}</div>
+          <div class="filter-desc">Aucune filtration nécessaire.</div>
         </div>
       </li>`;
+
+    // Recommandations conductivité (même si eau potable)
+    if (decision && decision.recommendations) {
+      decision.recommendations.forEach(r => {
+        const dotCls = r.level === 'critical' ? 'filter-crit' : (r.level === 'warning' ? 'filter-warn' : 'filter-info');
+        html += `<li class="filter-item">
+          <div class="filter-dot ${dotCls}"></div>
+          <div>
+            <div class="filter-title">${r.message}</div>
+            <div class="filter-desc">${r.detail}</div>
+          </div>
+        </li>`;
+      });
+    }
+
+    list.innerHTML = html;
+    btn.style.display = 'none';
     return;
   }
-  const seen = new Set();
-  let html = '';
-  oob.forEach(feat => {
-    const rec = FILTER_DB[feat];
-    if (rec && !seen.has(rec.title)) {
-      seen.add(rec.title);
+
+  // Eau non potable — filtre recommandé
+  let html = `
+    <li class="filter-item">
+      <div class="filter-dot" style="background:${decision.filter_color || 'var(--orange)'}"></div>
+      <div>
+        <div class="filter-title">${decision.filter_name}</div>
+        <div class="filter-desc">${decision.reason}</div>
+      </div>
+    </li>`;
+
+  // Recommandations supplémentaires (conductivité, SHAP)
+  if (decision.recommendations) {
+    decision.recommendations.forEach(r => {
+      const dotCls = r.level === 'critical' ? 'filter-crit' : (r.level === 'warning' ? 'filter-warn' : 'filter-info');
       html += `<li class="filter-item">
-        <div class="filter-dot filter-warn"></div>
+        <div class="filter-dot ${dotCls}"></div>
         <div>
-          <div class="filter-title">${rec.title}</div>
-          <div class="filter-desc">${rec.desc}</div>
+          <div class="filter-title">${r.message}</div>
+          <div class="filter-desc">${r.detail}</div>
         </div>
       </li>`;
-    }
-  });
-  if (!html) html = `<li class="filter-item">
-    <div class="filter-dot filter-info"></div>
-    <div><div class="filter-title">Valeurs hors bornes détectées</div>
-    <div class="filter-desc">Paramètre(s) : ${oob.join(', ')}</div></div>
-  </li>`;
+    });
+  }
+
   list.innerHTML = html;
+  btn.style.display = (userRole === 'administrator') ? '' : 'none';
+}
+
+async function activateFilters() {
+  const btn    = document.getElementById('btnActivate');
+  const status = document.getElementById('filterStatus');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Activation…';
+  status.textContent = '';
+
+  try {
+    const r = await fetch('/api/filter/activate', { method: 'POST' });
+    const d = await r.json();
+    if (d.error) {
+      status.style.color = 'var(--red)';
+      status.textContent = d.error;
+    } else {
+      const actionName = d.action ? d.action.filter_name : '';
+      status.style.color = 'var(--mint)';
+      status.textContent = d.message + (actionName ? ' → ' + actionName : '');
+    }
+  } catch(e) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Erreur réseau : ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Activer la filtration';
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -879,7 +1306,191 @@ function showToast(msg) {
 // ════════════════════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// HISTORIQUES
+// ════════════════════════════════════════════════════════════════════════════
+function switchHistoryTab(name, btn) {
+  document.querySelectorAll('.htab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.htab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('htab-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+let _historyLoaded = false;
+async function loadHistory() {
+  _historyLoaded = true;
+  await Promise.all([loadHistoryDiag(), loadHistoryFiltr(), loadHistoryFcast()]);
+}
+
+async function loadHistoryDiag() {
+  try {
+    const r = await fetch('/api/history/diagnostic?limit=200');
+    if (!r.ok) return;
+    const rows = await r.json();
+    const tbody = document.getElementById('tbodyDiag');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="empty-msg">Aucun diagnostic enregistré</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(d => {
+      const cls = d.potability === 1 ? 'badge-pot-nok' : 'badge-pot-ok';
+      const lbl = d.potability_label || '—';
+      return `<tr>
+        <td>${(d.timestamp||'').replace('T',' ')}</td>
+        <td>${d.ph != null ? d.ph.toFixed(2) : '—'}</td>
+        <td>${d.solids != null ? Math.round(d.solids) : '—'}</td>
+        <td>${d.conductivity != null ? d.conductivity.toFixed(1) : '—'}</td>
+        <td>${d.turbidity != null ? d.turbidity.toFixed(2) : '—'}</td>
+        <td>${d.temperature != null ? d.temperature.toFixed(1) : '—'}</td>
+        <td><span class="badge-pot ${cls}">${lbl}</span></td>
+        <td>${d.confidence != null ? (d.confidence*100).toFixed(1)+'%' : '—'}</td>
+        <td>${d.threshold != null ? (d.threshold*100).toFixed(0)+'%' : '—'}</td>
+      </tr>`;
+    }).join('');
+  } catch(_) {}
+}
+
+async function loadHistoryFiltr() {
+  try {
+    const r = await fetch('/api/history/filtration?limit=200');
+    if (!r.ok) return;
+    const rows = await r.json();
+    const tbody = document.getElementById('tbodyFiltr');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">Aucune filtration enregistrée</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(d => `<tr>
+      <td>${(d.timestamp||'').replace('T',' ')}</td>
+      <td>${d.filter_name || '—'}</td>
+      <td>${d.reason || '—'}</td>
+      <td>${d.duration_s != null ? d.duration_s.toFixed(1) : '—'}</td>
+      <td>${d.activated ? '✓' : '✗'}</td>
+      <td>${d.mock ? 'Mock' : 'GPIO'}</td>
+    </tr>`).join('');
+  } catch(_) {}
+}
+
+async function loadHistoryFcast() {
+  try {
+    const r = await fetch('/api/history/forecast?limit=100');
+    if (!r.ok) return;
+    const rows = await r.json();
+    const tbody = document.getElementById('tbodyFcast');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-msg">Aucune prévision enregistrée</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(d => `<tr>
+      <td>${(d.timestamp||'').replace('T',' ')}</td>
+      <td>${d.inference_ms != null ? d.inference_ms.toFixed(1)+' ms' : '—'}</td>
+      <td>${d.n_alerts_critical || 0}</td>
+      <td>${d.n_alerts_warning || 0}</td>
+      <td>${d.n_alerts_info || 0}</td>
+    </tr>`).join('');
+  } catch(_) {}
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MODÈLES IA
+// ════════════════════════════════════════════════════════════════════════════
+let _activeModel = '';
+
+async function loadModels() {
+  try {
+    const r = await fetch('/api/models');
+    if (!r.ok) return;
+    const d = await r.json();
+    _activeModel = d.active_model || '';
+    renderModelsTable(d.models || [], _activeModel);
+  } catch(_) {}
+}
+
+function renderModelsTable(models, activeKey) {
+  const tbody = document.getElementById('tbodyModels');
+  if (!models.length) {
+    tbody.innerHTML = '<tr><td colspan="12" class="empty-msg">Aucun rapport disponible</td></tr>';
+    return;
+  }
+
+  const labels = {
+    catboost:'CatBoost', rf:'Random Forest', lgbm:'LightGBM',
+    gb:'Gradient Boosting', xgb:'XGBoost', et:'Extra Trees',
+    logreg:'Logistic Regression', svm:'SVM',
+  };
+
+  tbody.innerHTML = models.map(m => {
+    const isActive = m.model_key === activeKey;
+    const rowCls = isActive ? 'row-active' : '';
+    const btnHtml = (userRole === 'administrator')
+      ? (isActive
+          ? '<button class="btn-select active-model">Actif</button>'
+          : `<button class="btn-select" onclick="selectModel('${m.model_key}')">Sélectionner</button>`)
+      : (isActive ? '<span style="color:var(--mint);font-size:.72rem;font-weight:600">Actif</span>' : '');
+    return `<tr class="${rowCls}">
+      <td>#${m.rank}</td>
+      <td>${labels[m.model_key] || m.model_key}</td>
+      <td>${(m.composite_score||0).toFixed(4)}</td>
+      <td>${(m.roc_auc_test||0).toFixed(4)}</td>
+      <td>${(m.gmean_test||0).toFixed(4)}</td>
+      <td>${(m.f1_test||0).toFixed(4)}</td>
+      <td>${(m.recall_test||0).toFixed(4)}</td>
+      <td>${(m.precision_test||0).toFixed(4)}</td>
+      <td>${(m.accuracy_test||0).toFixed(4)}</td>
+      <td>${(m.mcc_test||0).toFixed(4)}</td>
+      <td>${(m.threshold||0.5).toFixed(2)}</td>
+      <td>${btnHtml}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function selectModel(key) {
+  const status = document.getElementById('modelStatus');
+  status.style.color = 'var(--text-muted)';
+  status.textContent = 'Changement en cours…';
+
+  try {
+    const r = await fetch('/api/models/select/' + key, { method: 'POST' });
+    const d = await r.json();
+    if (d.error) {
+      status.style.color = 'var(--red)';
+      status.textContent = d.error;
+    } else {
+      status.style.color = 'var(--mint)';
+      status.textContent = d.message;
+      _activeModel = d.active_model;
+      loadModels();
+    }
+  } catch(e) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Erreur : ' + e.message;
+  }
+}
+
+async function loadSystemStatus() {
+  try {
+    const r = await fetch('/api/status');
+    if (!r.ok) return;
+    const d = await r.json();
+    const map = {
+      'dot-diag':   d.diagnostic_model,
+      'dot-lstm':   d.forecast_model,
+      'dot-alert':  d.alert_engine,
+      'dot-filter': d.filter_controller,
+      'dot-shap':   d.shap_available,
+    };
+    for (const [id, ok] of Object.entries(map)) {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('ok', !!ok);
+    }
+  } catch(_) {}
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  loadUserRole().then(() => {
+    loadModels();
+    loadSystemStatus();
+  });
   connectWS();
 });
 </script>

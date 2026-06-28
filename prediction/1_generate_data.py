@@ -22,6 +22,7 @@ Usage
     python prediction/1_generate_data.py
 """
 
+import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -31,6 +32,9 @@ import pandas as pd
 # ── Chemins ─────────────────────────────────────────────────────────────────
 BASE = Path(__file__).parent
 (BASE / "data").mkdir(parents=True, exist_ok=True)
+sys.path.insert(0, str(BASE.parent / "src"))
+
+from config import TDS_EC_FACTOR
 
 # ── Reproductibilité ────────────────────────────────────────────────────────
 np.random.seed(42)
@@ -38,7 +42,6 @@ np.random.seed(42)
 # ── Paramètres ──────────────────────────────────────────────────────────────
 N_JOURS       = 120
 FREQ_MINUTES  = 60
-TDS_EC_FACTOR = 0.67    # Solids [mg/L] = Conductivity [µS/cm] × 0.67
 
 n_points = N_JOURS * 24 * (60 // FREQ_MINUTES)
 debut     = datetime(2024, 1, 1)
@@ -140,10 +143,10 @@ df = pd.DataFrame({
     "Solids":      np.round(solids,       2),
     "Conductivity":np.round(conductivity, 2),
     "Turbidity":   np.round(turbidity,    3),
-    "temperature": np.round(temperature,  2),
+    "Temperature": np.round(temperature,  2),
 })
 df.to_csv(BASE / "data/dataset.csv", index=False)
 
 print(f"✅ Dataset : {len(df)} points sur {N_JOURS} jours (intervalle {FREQ_MINUTES} min)")
 print(f"\nStatistiques :")
-print(df[["ph", "Solids", "Conductivity", "Turbidity", "temperature"]].describe().round(2))
+print(df[["ph", "Solids", "Conductivity", "Turbidity", "Temperature"]].describe().round(2))
