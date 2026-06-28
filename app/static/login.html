@@ -21,6 +21,7 @@
     --text:    #e6edf3;
     --text-muted: #8b949e;
     --red:     #f85149;
+    --green:   #3fb950;
     --radius:  10px;
   }
 
@@ -35,16 +36,9 @@
     justify-content: center;
   }
 
-  .login-container {
-    width: 100%;
-    max-width: 400px;
-    padding: 0 1.5rem;
-  }
+  .login-container { width: 100%; max-width: 400px; padding: 0 1.5rem; }
 
-  .logo-block {
-    text-align: center;
-    margin-bottom: 2rem;
-  }
+  .logo-block { text-align: center; margin-bottom: 2rem; }
   .logo-icon {
     width: 56px; height: 56px;
     background: var(--mint);
@@ -55,17 +49,8 @@
     font-size: 1.6rem;
     margin-bottom: .75rem;
   }
-  .logo-title {
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: #fff;
-    letter-spacing: .06em;
-  }
-  .logo-subtitle {
-    font-size: .82rem;
-    color: var(--text-muted);
-    margin-top: .3rem;
-  }
+  .logo-title { font-size: 1.6rem; font-weight: 700; color: #fff; letter-spacing: .06em; }
+  .logo-subtitle { font-size: .82rem; color: var(--text-muted); margin-top: .3rem; }
 
   .card {
     background: var(--bg2);
@@ -75,74 +60,48 @@
     box-shadow: 0 4px 24px rgba(0,0,0,.4);
   }
 
-  .card h2 {
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin-bottom: 1.5rem;
-    color: var(--text);
-  }
+  .card h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text); }
 
-  .field {
-    margin-bottom: 1.25rem;
-  }
+  .field { margin-bottom: 1.25rem; }
   .field label {
-    display: block;
-    font-size: .78rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    margin-bottom: .4rem;
-    text-transform: uppercase;
-    letter-spacing: .05em;
+    display: block; font-size: .78rem; font-weight: 500;
+    color: var(--text-muted); margin-bottom: .4rem;
+    text-transform: uppercase; letter-spacing: .05em;
   }
   .field input {
-    width: 100%;
-    padding: .7rem .9rem;
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
-    font-family: inherit;
-    font-size: .9rem;
-    outline: none;
-    transition: border-color .2s;
+    width: 100%; padding: .7rem .9rem;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text);
+    font-family: inherit; font-size: .9rem;
+    outline: none; transition: border-color .2s;
   }
-  .field input:focus {
-    border-color: var(--mint);
-  }
-  .field input::placeholder {
-    color: #555;
-  }
+  .field input:focus { border-color: var(--mint); }
+  .field input::placeholder { color: #555; }
 
-  .btn-login {
-    width: 100%;
-    padding: .75rem;
-    border: none;
-    border-radius: 6px;
-    background: var(--mint);
-    color: var(--navy);
-    font-family: inherit;
-    font-size: .95rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background .2s;
+  .btn-primary {
+    width: 100%; padding: .75rem; border: none; border-radius: 6px;
+    background: var(--mint); color: var(--navy);
+    font-family: inherit; font-size: .95rem; font-weight: 600;
+    cursor: pointer; transition: background .2s;
   }
-  .btn-login:hover { background: #03d9ab; }
-  .btn-login:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary:hover { background: #03d9ab; }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
 
-  .error-msg {
-    color: var(--red);
-    font-size: .82rem;
-    text-align: center;
-    margin-top: 1rem;
-    min-height: 1.2em;
-  }
+  .error-msg { color: var(--red); font-size: .82rem; text-align: center; margin-top: 1rem; min-height: 1.2em; }
+  .success-msg { color: var(--green); font-size: .82rem; text-align: center; margin-top: 1rem; min-height: 1.2em; }
 
-  .footer-text {
-    text-align: center;
-    font-size: .72rem;
-    color: var(--text-muted);
-    margin-top: 1.5rem;
+  .switch-link {
+    text-align: center; margin-top: 1.2rem; font-size: .82rem; color: var(--text-muted);
   }
+  .switch-link a {
+    color: var(--mint); text-decoration: none; font-weight: 500; cursor: pointer;
+  }
+  .switch-link a:hover { text-decoration: underline; }
+
+  .footer-text { text-align: center; font-size: .72rem; color: var(--text-muted); margin-top: 1.5rem; }
+
+  .form-panel { display: none; }
+  .form-panel.active { display: block; }
 </style>
 </head>
 <body>
@@ -155,59 +114,86 @@
     <div class="logo-subtitle">Système intelligent de surveillance de la qualité de l'eau</div>
   </div>
 
-  <div class="card">
-    <h2>Connexion</h2>
-
-    <div class="field">
-      <label for="username">Nom d'utilisateur</label>
-      <input id="username" type="text" placeholder="Entrez votre identifiant" autofocus>
+  <!-- ══ Connexion ══ -->
+  <div class="form-panel active" id="panelLogin">
+    <div class="card">
+      <h2>Connexion</h2>
+      <div class="field">
+        <label for="loginUser">Nom d'utilisateur</label>
+        <input id="loginUser" type="text" placeholder="Entrez votre identifiant" autofocus>
+      </div>
+      <div class="field">
+        <label for="loginPass">Mot de passe</label>
+        <input id="loginPass" type="password" placeholder="Entrez votre mot de passe">
+      </div>
+      <button class="btn-primary" id="btnLogin" onclick="login()">Se connecter</button>
+      <div class="error-msg" id="loginError"></div>
+      <div class="switch-link">
+        Pas encore de compte ? <a onclick="showPanel('register')">Créer un compte</a>
+      </div>
     </div>
-
-    <div class="field">
-      <label for="password">Mot de passe</label>
-      <input id="password" type="password" placeholder="Entrez votre mot de passe">
-    </div>
-
-    <button class="btn-login" id="btnLogin" onclick="login()">Se connecter</button>
-
-    <div class="error-msg" id="error"></div>
   </div>
 
-  <div class="footer-text">
-    École Centrale Casablanca — PLBD
+  <!-- ══ Inscription ══ -->
+  <div class="form-panel" id="panelRegister">
+    <div class="card">
+      <h2>Créer un compte</h2>
+      <div class="field">
+        <label for="regUser">Nom d'utilisateur</label>
+        <input id="regUser" type="text" placeholder="Choisissez un identifiant">
+      </div>
+      <div class="field">
+        <label for="regPass">Mot de passe</label>
+        <input id="regPass" type="password" placeholder="Choisissez un mot de passe">
+      </div>
+      <div class="field">
+        <label for="regPass2">Confirmer le mot de passe</label>
+        <input id="regPass2" type="password" placeholder="Retapez le mot de passe">
+      </div>
+      <button class="btn-primary" id="btnRegister" onclick="register()">Créer le compte</button>
+      <div class="error-msg" id="regError"></div>
+      <div class="success-msg" id="regSuccess"></div>
+      <div class="switch-link">
+        Déjà un compte ? <a onclick="showPanel('login')">Se connecter</a>
+      </div>
+    </div>
   </div>
+
+  <div class="footer-text">École Centrale Casablanca — PLBD</div>
 
 </div>
 
 <script>
+function showPanel(name) {
+  document.querySelectorAll('.form-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+  // Réinitialiser les messages
+  document.querySelectorAll('.error-msg, .success-msg').forEach(e => e.textContent = '');
+}
+
 async function login() {
   const btn   = document.getElementById('btnLogin');
-  const error = document.getElementById('error');
-  const username = document.getElementById('username').value.trim();
-  const password = document.getElementById('password').value;
-
+  const error = document.getElementById('loginError');
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
   error.textContent = '';
 
-  if (!username || !password) {
-    error.textContent = 'Veuillez remplir tous les champs.';
-    return;
-  }
+  if (!username || !password) { error.textContent = 'Veuillez remplir tous les champs.'; return; }
 
   btn.disabled = true;
   btn.textContent = 'Connexion…';
 
   try {
-    const response = await fetch('/login', {
+    const r = await fetch('/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
-
-    if (response.ok) {
+    if (r.ok) {
       window.location = '/';
     } else {
-      const data = await response.json();
-      error.textContent = data.detail || 'Identifiants incorrects.';
+      const d = await r.json();
+      error.textContent = d.detail || 'Identifiants incorrects.';
     }
   } catch(e) {
     error.textContent = 'Erreur de connexion au serveur.';
@@ -217,12 +203,57 @@ async function login() {
   }
 }
 
-document.getElementById('password').addEventListener('keydown', e => {
-  if (e.key === 'Enter') login();
-});
-document.getElementById('username').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('password').focus();
-});
+async function register() {
+  const btn     = document.getElementById('btnRegister');
+  const error   = document.getElementById('regError');
+  const success = document.getElementById('regSuccess');
+  const username = document.getElementById('regUser').value.trim();
+  const password = document.getElementById('regPass').value;
+  const password2 = document.getElementById('regPass2').value;
+  error.textContent = '';
+  success.textContent = '';
+
+  if (!username || !password || !password2) {
+    error.textContent = 'Veuillez remplir tous les champs.'; return;
+  }
+  if (password !== password2) {
+    error.textContent = 'Les mots de passe ne correspondent pas.'; return;
+  }
+  if (password.length < 6) {
+    error.textContent = 'Le mot de passe doit contenir au moins 6 caractères.'; return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Création…';
+
+  try {
+    const r = await fetch('/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const d = await r.json();
+    if (r.ok) {
+      success.textContent = 'Compte créé ! Vous pouvez vous connecter.';
+      document.getElementById('regUser').value = '';
+      document.getElementById('regPass').value = '';
+      document.getElementById('regPass2').value = '';
+      setTimeout(() => showPanel('login'), 2000);
+    } else {
+      error.textContent = d.detail || 'Erreur lors de la création.';
+    }
+  } catch(e) {
+    error.textContent = 'Erreur de connexion au serveur.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Créer le compte';
+  }
+}
+
+// Enter pour soumettre
+document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+document.getElementById('loginUser').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPass').focus(); });
+document.getElementById('regPass2').addEventListener('keydown', e => { if (e.key === 'Enter') register(); });
 </script>
 </body>
 </html>

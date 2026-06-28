@@ -34,6 +34,22 @@ class CreateUserRequest(BaseModel):
 
 
 # ==========================================================
+# INSCRIPTION (publique — rôle opérateur par défaut)
+# ==========================================================
+
+@router.post("/register")
+def register(data: CreateUserRequest):
+    if get_user(data.username) is not None:
+        raise HTTPException(status_code=400, detail="Ce nom d'utilisateur est déjà pris.")
+
+    try:
+        user = create_user(data.username, data.password, role="operator")
+        return {"message": f"Compte '{data.username}' créé avec succès.", "user": user}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ==========================================================
 # CONNEXION
 # ==========================================================
 
