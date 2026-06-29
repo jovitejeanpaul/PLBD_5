@@ -2,7 +2,7 @@
 
 > Systeme embarque multi-filtre avec IA sur Raspberry Pi 4 pour le diagnostic, la prevision et le traitement automatise de la qualite de l'eau.
 
-**Ecole Centrale Casablanca — Projet PLBD**
+**Ecole Centrale Casablanca — Projet Learning By Doing (PLBD), 1ere annee cycle ingenieur**
 
 ---
 
