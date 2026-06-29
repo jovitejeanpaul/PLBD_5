@@ -82,8 +82,16 @@ except ImportError:
     }
     TDS_EC_FACTOR = 0.67
 
-# Nombre d'échantillons pour la moyenne — harmonisé à 5 pour tous les capteurs
-N_SAMPLES = 5
+# ── Paramètres de stabilisation des capteurs ─────────────────────────────
+N_SAMPLES = 5              # nombre de lectures dans la fenêtre de stabilité
+STABILITY_INTERVAL = 0.5   # secondes entre deux lectures
+STABILITY_THRESHOLD = {    # écart-type max pour considérer le capteur stable
+    "ph":           0.05,  # ±0.05 unité pH
+    "Conductivity": 10.0,  # ±10 µS/cm
+    "Turbidity":    0.3,   # ±0.3 NTU
+    "Temperature":  0.2,   # ±0.2 °C
+}
+STABILITY_TIMEOUT = 15.0   # secondes max avant de considérer la lecture comme valide
 
 # ===========================================================================
 # CAPTEUR DS18B20 — TEMPÉRATURE (1-Wire, GPIO 4)
@@ -209,10 +217,14 @@ def voltage_to_turbidity(v: float) -> float:
 
 class ADS1115Reader:
     """
-    Lecture réelle via ADS1115 (I2C) + DS18B20 (1-Wire).
+    Lecture réelle via ADS1115 (I2C) + DS18B20 (1-Wire) avec stabilisation.
 
-    Canaux ADS1115 : A0=TDS · A1=pH · A3=Turbidité
+    Canaux ADS1115 : A1=TDS · A2=pH · A3=Turbidité
     Capteur 1-Wire : DS18B20 → Temperature
+
+    Stabilisation : accumule des lectures toutes les STABILITY_INTERVAL
+    secondes jusqu'à ce que les N_SAMPLES dernières lectures aient un
+    écart-type inférieur au seuil (STABILITY_THRESHOLD), ou timeout.
     """
 
     def __init__(self, gain: int = 1, n_samples: int = N_SAMPLES):
@@ -229,18 +241,62 @@ class ADS1115Reader:
         if _DS18B20_FILE is None:
             raise RuntimeError("DS18B20 non détecté. Vérifiez le câblage sur GPIO 4.")
 
-    def _mean_voltage(self, channel) -> float:
-        readings = [channel.voltage for _ in range(self._n)]
-        time.sleep(0.01)
-        return float(np.mean(readings))
+    def _stable_voltage(self, channel, threshold: float) -> tuple:
+        """
+        Lit le canal jusqu'à stabilisation ou timeout.
+
+        Returns
+        -------
+        tuple (voltage_moyen, is_stable, n_lectures)
+        """
+        readings = []
+        t0 = time.time()
+
+        while True:
+            readings.append(channel.voltage)
+
+            if len(readings) >= self._n:
+                window = readings[-self._n:]
+                std = float(np.std(window))
+                if std <= threshold:
+                    return float(np.mean(window)), True, len(readings)
+
+            if time.time() - t0 > STABILITY_TIMEOUT:
+                window = readings[-self._n:] if len(readings) >= self._n else readings
+                logger.warning(
+                    "Stabilisation timeout (%.1fs, %d lectures, std=%.4f > seuil=%.4f)",
+                    STABILITY_TIMEOUT, len(readings),
+                    float(np.std(window)), threshold,
+                )
+                return float(np.mean(window)), False, len(readings)
+
+            time.sleep(STABILITY_INTERVAL)
 
     def read_features(self) -> dict[str, float]:
-        """Retourne les 5 mesures : 4 features diagnostic + température prédiction."""
-        v_tds  = self._mean_voltage(self._ch_tds)
-        v_ph   = self._mean_voltage(self._ch_ph)
-        v_turb = self._mean_voltage(self._ch_turb)
-        temp   = read_temperature_mean(_DS18B20_FILE, self._n)
-        ec     = voltage_to_conductivity(v_tds)
+        """
+        Lit les capteurs en attendant la stabilisation de chacun.
+
+        Retourne les 5 mesures + métadonnées de stabilité.
+        """
+        v_tds, tds_stable, _ = self._stable_voltage(
+            self._ch_tds, STABILITY_THRESHOLD.get("Conductivity", 10.0) / 100
+        )
+        v_ph, ph_stable, _ = self._stable_voltage(
+            self._ch_ph, STABILITY_THRESHOLD.get("ph", 0.05) / 3.5
+        )
+        v_turb, turb_stable, _ = self._stable_voltage(
+            self._ch_turb, STABILITY_THRESHOLD.get("Turbidity", 0.3) / 100
+        )
+        temp = read_temperature_mean(_DS18B20_FILE, self._n)
+
+        ec = voltage_to_conductivity(v_tds)
+
+        all_stable = tds_stable and ph_stable and turb_stable
+        if all_stable:
+            logger.info("Capteurs stabilisés — lecture fiable")
+        else:
+            logger.warning("Certains capteurs n'ont pas convergé (timeout)")
+
         return {
             "ph":           voltage_to_ph(v_ph, temperature=temp),
             "Solids":       conductivity_to_tds(ec),
