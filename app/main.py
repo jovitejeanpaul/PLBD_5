@@ -371,6 +371,50 @@ def _run_diagnostic() -> dict:
 # REST — Prévision 24h + Alertes
 # ════════════════════════════════════════════════════════════════════════════
 
+def _run_lstm_inference(history_arr: np.ndarray) -> dict:
+    """Exécute l'inférence LSTM sur un tableau (WINDOW_SIZE, N_FEATURES) et retourne le résultat formaté."""
+    from prediction.model import FEATURES as FC_FEATURES, HORIZON, WINDOW_SIZE
+
+    t0     = time.perf_counter()
+    scaled = lstm_scaler.transform(history_arr)
+
+    if _lstm_backend == "onnx":
+        x = scaled.reshape(1, WINDOW_SIZE, len(FC_FEATURES)).astype(np.float32)
+        y_scaled = lstm_model.run(None, {"input": x})[0].squeeze(0)
+    else:
+        import torch
+        x = torch.FloatTensor(scaled).unsqueeze(0)
+        with torch.no_grad():
+            y_scaled = lstm_model(x).squeeze(0).numpy()
+
+    predicted = lstm_scaler.inverse_transform(y_scaled)
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+
+    alerts_data = []
+    if alert_engine is not None:
+        alerts = alert_engine.analyze(predicted, FC_FEATURES, horizon_h=HORIZON)
+        alerts_data = [a.to_dict() for a in alerts]
+
+    predictions = {
+        feat: [round(float(predicted[h, j]), 4) for h in range(HORIZON)]
+        for j, feat in enumerate(FC_FEATURES)
+    }
+
+    return {
+        "features":       FC_FEATURES,
+        "hours":          list(range(1, HORIZON + 1)),
+        "predictions":    predictions,
+        "alerts":         alerts_data,
+        "n_alerts":       {
+            "CRITICAL": sum(1 for a in alerts_data if a["level"] == "CRITICAL"),
+            "WARNING":  sum(1 for a in alerts_data if a["level"] == "WARNING"),
+            "INFO":     sum(1 for a in alerts_data if a["level"] == "INFO"),
+        },
+        "inference_ms":   round(elapsed_ms, 2),
+        "timestamp":      _now(),
+    }
+
+
 @app.get("/api/forecast")
 async def get_forecast(request: Request):
     try:
@@ -385,16 +429,9 @@ async def get_forecast(request: Request):
         )
 
     try:
-        from prediction.model import FEATURES as FC_FEATURES, HORIZON, WINDOW_SIZE
+        from prediction.model import FEATURES as FC_FEATURES, WINDOW_SIZE
 
-        # ── Construire la séquence d'entrée (24 médianes horaires) ────
-        if len(_hourly_buffer) >= WINDOW_SIZE:
-            history_arr = np.array(
-                [[h.get(f, 0.0) for f in FC_FEATURES]
-                 for h in list(_hourly_buffer)[-WINDOW_SIZE:]],
-                dtype=np.float32,
-            )
-        else:
+        if len(_hourly_buffer) < WINDOW_SIZE:
             hours_remaining = WINDOW_SIZE - len(_hourly_buffer)
             return JSONResponse(
                 status_code=503,
@@ -406,48 +443,15 @@ async def get_forecast(request: Request):
                 },
             )
 
-        # ── Inférence LSTM (ONNX ou PyTorch) ────────────────────────────
-        t0     = time.perf_counter()
-        scaled = lstm_scaler.transform(history_arr)
+        history_arr = np.array(
+            [[h.get(f, 0.0) for f in FC_FEATURES]
+             for h in list(_hourly_buffer)[-WINDOW_SIZE:]],
+            dtype=np.float32,
+        )
 
-        if _lstm_backend == "onnx":
-            x = scaled.reshape(1, WINDOW_SIZE, len(FC_FEATURES)).astype(np.float32)
-            y_scaled = lstm_model.run(None, {"input": x})[0].squeeze(0)
-        else:
-            import torch
-            x = torch.FloatTensor(scaled).unsqueeze(0)
-            with torch.no_grad():
-                y_scaled = lstm_model(x).squeeze(0).numpy()
-
-        predicted = lstm_scaler.inverse_transform(y_scaled)
-        elapsed_ms = (time.perf_counter() - t0) * 1000
-
-        # ── Alertes ──────────────────────────────────────────────────────
-        alerts_data = []
-        if alert_engine is not None:
-            # On passe uniquement les features communes avec le moteur d'alertes
-            alerts = alert_engine.analyze(predicted, FC_FEATURES, horizon_h=HORIZON)
-            alerts_data = [a.to_dict() for a in alerts]
-
-        # ── Formater la réponse ──────────────────────────────────────────
-        predictions = {
-            feat: [round(float(predicted[h, j]), 4) for h in range(HORIZON)]
-            for j, feat in enumerate(FC_FEATURES)
-        }
-        response_data = {
-            "features":       FC_FEATURES,
-            "hours":          list(range(1, HORIZON + 1)),
-            "predictions":    predictions,
-            "alerts":         alerts_data,
-            "n_alerts":       {
-                "CRITICAL": sum(1 for a in alerts_data if a["level"] == "CRITICAL"),
-                "WARNING":  sum(1 for a in alerts_data if a["level"] == "WARNING"),
-                "INFO":     sum(1 for a in alerts_data if a["level"] == "INFO"),
-            },
-            "inference_ms":   round(elapsed_ms, 2),
-            "timestamp":      _now(),
-            "buffer_size":    len(_hourly_buffer),
-        }
+        response_data = _run_lstm_inference(history_arr)
+        response_data["mode"] = "reel"
+        response_data["buffer_size"] = len(_hourly_buffer)
 
         try:
             save_forecast(response_data)
@@ -458,6 +462,67 @@ async def get_forecast(request: Request):
 
     except Exception as e:
         logger.error("Erreur prévision : %s", e)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/forecast/simulate")
+async def simulate_forecast(request: Request):
+    """
+    Génère 24 mesures horaires simulées à partir de la dernière lecture capteur
+    (ou de valeurs par défaut) et lance la prévision LSTM.
+    Permet de démontrer le module de prédiction sans attendre 24h.
+    """
+    try:
+        get_current_user(request)
+    except Exception:
+        return JSONResponse(status_code=401, content={"error": "Non authentifié"})
+    if lstm_model is None or lstm_scaler is None:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Modèle de prévision non disponible."},
+        )
+
+    try:
+        from prediction.model import FEATURES as FC_FEATURES, WINDOW_SIZE
+
+        rng = np.random.default_rng()
+
+        # Partir des dernières valeurs capteur réelles si disponibles
+        if pipeline is not None:
+            last_reading = pipeline.run_once()["raw_values"]
+            base = [last_reading.get(f, 0.0) for f in FC_FEATURES]
+        else:
+            base = [7.2, 600.0, 900.0, 2.5, 22.0]
+
+        # Générer 24 mesures horaires avec variations réalistes
+        stds = {"ph": 0.15, "Solids": 40.0, "Conductivity": 60.0,
+                "Turbidity": 0.8, "Temperature": 1.5}
+        hours = np.arange(WINDOW_SIZE)
+
+        history = np.zeros((WINDOW_SIZE, len(FC_FEATURES)), dtype=np.float32)
+        for j, feat in enumerate(FC_FEATURES):
+            cycle = np.sin(2 * np.pi * hours / 24) * stds.get(feat, 1.0)
+            noise = rng.normal(0, stds.get(feat, 1.0) * 0.3, WINDOW_SIZE)
+            history[:, j] = base[j] + cycle + noise
+
+        # Clipper aux bornes physiques
+        bounds = {"ph": (0, 14), "Solids": (0, 3000), "Conductivity": (0, 3500),
+                  "Turbidity": (0, 100), "Temperature": (0, 50)}
+        for j, feat in enumerate(FC_FEATURES):
+            lo, hi = bounds.get(feat, (0, 1e6))
+            history[:, j] = np.clip(history[:, j], lo, hi)
+
+        response_data = _run_lstm_inference(history)
+        response_data["mode"] = "simulation"
+        response_data["simulated_input"] = {
+            feat: [round(float(history[h, j]), 3) for h in range(WINDOW_SIZE)]
+            for j, feat in enumerate(FC_FEATURES)
+        }
+
+        return response_data
+
+    except Exception as e:
+        logger.error("Erreur simulation : %s", e)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 

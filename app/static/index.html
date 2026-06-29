@@ -278,6 +278,20 @@
     }
     .btn-primary:hover { background: #03d9ab; }
     .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-secondary {
+      padding: .55rem 1.2rem;
+      border: 1px solid var(--teal);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--teal);
+      font-family: inherit;
+      font-size: .875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-secondary:hover { background: var(--teal); color: #fff; }
+    .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
     .btn-stop {
       padding: .55rem 1.2rem;
       border: 1px solid var(--red);
@@ -880,10 +894,16 @@
           Cliquez sur « Lancer » pour calculer la prévision à partir de l'historique des capteurs.
         </div>
       </div>
-      <button class="btn btn-primary" id="btnForecast" onclick="runForecast()">
-        🔮 Lancer la prévision
-      </button>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn btn-primary" id="btnForecast" onclick="runForecast('reel')">
+          Lancer la prévision
+        </button>
+        <button class="btn btn-secondary" id="btnSimulate" onclick="runForecast('simulation')">
+          Simulation
+        </button>
+      </div>
     </div>
+    <div id="forecastMode" style="font-size:.75rem;color:var(--text-muted);margin-bottom:.5rem"></div>
 
     <!-- Graphiques -->
     <div class="charts-grid" id="chartsGrid">
@@ -1487,32 +1507,48 @@ function renderShap(d) {
 // ════════════════════════════════════════════════════════════════════════════
 const _charts = {};
 
-async function runForecast() {
-  const btn = document.getElementById('btnForecast');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Calcul…';
+async function runForecast(mode) {
+  const btnReal = document.getElementById('btnForecast');
+  const btnSim  = document.getElementById('btnSimulate');
+  const modeDiv = document.getElementById('forecastMode');
+  btnReal.disabled = true;
+  btnSim.disabled  = true;
+
+  const isSimulation = (mode === 'simulation');
+  const activeBtn = isSimulation ? btnSim : btnReal;
+  activeBtn.innerHTML = '<span class="spinner"></span> Calcul…';
   document.getElementById('forecastMeta').textContent = 'Inférence LSTM en cours…';
 
   try {
-    const r = await fetch('/api/forecast');
+    const url = isSimulation ? '/api/forecast/simulate' : '/api/forecast';
+    const opts = isSimulation ? { method: 'POST' } : {};
+    const r = await fetch(url, opts);
     const d = await r.json();
 
     if (d.error) {
-      showToast('⚠ ' + d.error);
+      showToast(d.error);
       document.getElementById('forecastMeta').textContent = d.error;
       return;
     }
 
     renderCharts(d);
     renderAlerts(d);
+
+    const modeLabel = d.mode === 'simulation'
+      ? 'Mode SIMULATION — donnees generees a partir des dernieres mesures capteur'
+      : 'Mode REEL — donnees du buffer horaire (medianes)';
+    modeDiv.innerHTML = `<span style="color:${d.mode === 'simulation' ? 'var(--orange)' : 'var(--mint)'}">${modeLabel}</span>`;
+
+    const bufInfo = d.buffer_size != null ? `Buffer : ${d.buffer_size}/24` : 'Simulation';
     document.getElementById('forecastMeta').textContent =
-      `Calculé en ${d.inference_ms} ms — ${d.timestamp}  |  ` +
-      `Buffer : ${d.buffer_size}/24 mesures`;
+      `Calcule en ${d.inference_ms} ms — ${d.timestamp}  |  ${bufInfo}`;
   } catch(e) {
-    showToast('Erreur réseau : ' + e.message);
+    showToast('Erreur reseau : ' + e.message);
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = '🔮 Actualiser la prévision';
+    btnReal.disabled = false;
+    btnSim.disabled  = false;
+    btnReal.innerHTML = 'Lancer la prevision';
+    btnSim.innerHTML  = 'Simulation';
   }
 }
 

@@ -242,6 +242,23 @@ THRESHOLD_TUNING = {
 DEFAULT_THRESHOLD: float = 0.5
 
 # ===========================================================================
+# CALIBRATION DES PROBABILITÉS
+# ===========================================================================
+
+CALIBRATION = {
+    # Activer la calibration des probabilités après entraînement
+    "enabled": True,
+
+    # Méthode : "sigmoid" (Platt scaling) ou "isotonic" (non-paramétrique)
+    # - sigmoid : plus stable sur petits datasets, suppose une relation sigmoïde
+    # - isotonic : plus flexible, nécessite plus de données
+    "method": "sigmoid",
+
+    # Nombre de folds pour la calibration CV
+    "cv": 5,
+}
+
+# ===========================================================================
 # VALIDATION CROISÉE
 # ===========================================================================
 

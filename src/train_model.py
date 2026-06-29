@@ -79,7 +79,7 @@ from sklearn.model_selection import StratifiedKFold, cross_validate
 from sklearn.svm import SVC
 
 from config import (
-    CLASS_LABELS, CV, DATA, FBETA_SCORER, FEATURES, GMEAN_SCORER,
+    CALIBRATION, CLASS_LABELS, CV, DATA, FBETA_SCORER, FEATURES, GMEAN_SCORER,
     METRICS, MODEL_SELECTION, PATHS, PLOT, POSITIVE_CLASS, RANDOM_STATE,
     REBALANCING, TARGET, THRESHOLD_TUNING, ensure_dirs,
 )
@@ -384,12 +384,24 @@ def train_and_evaluate(
         logger.info("  Seuil intégré au modèle : %.3f  (ThresholdClassifier)", threshold if best_params_thresholds and key in (best_params_thresholds or {}) else 0.5)
 
 
-        # Entraînement final — emballer dans ThresholdClassifier
-        # Le seuil est intégré au modèle : predict() l'utilisera automatiquement
-        # en production après joblib.load(), sans configuration supplémentaire.
-        wrapped = ThresholdClassifier(estimator=model, threshold=threshold)
-        wrapped.fit(X_train, y_train)
-        fitted_models[key] = wrapped   # on sauvegarde le wrapper, pas le modèle nu
+        # Calibration des probabilités (optionnelle)
+        if CALIBRATION["enabled"]:
+            logger.info("  Calibration des probabilités (%s, cv=%d)…",
+                        CALIBRATION["method"], CALIBRATION["cv"])
+            calibrated = CalibratedClassifierCV(
+                model,
+                method=CALIBRATION["method"],
+                cv=CALIBRATION["cv"],
+            )
+            calibrated.fit(X_train, y_train)
+            estimator_to_wrap = calibrated
+        else:
+            model.fit(X_train, y_train)
+            estimator_to_wrap = model
+
+        wrapped = ThresholdClassifier(estimator=estimator_to_wrap, threshold=threshold)
+        wrapped.classes_ = np.array([0, 1])
+        fitted_models[key] = wrapped
 
         # Prédictions cohérentes avec le seuil intégré
         y_proba = wrapped.predict_proba(X_test)[:, 1]
@@ -402,12 +414,15 @@ def train_and_evaluate(
         _r1 = _recall(y_test, y_pred, pos_label=1, zero_division=0)
         _r0 = _recall(y_test, y_pred, pos_label=0, zero_division=0)
         _gmean_val = float(_np.sqrt(_r1 * _r0))
+        from sklearn.metrics import brier_score_loss
         test_metrics = {
             "threshold":      round(threshold, 3),
+            "calibrated":     CALIBRATION["enabled"],
             "gmean_test":     round(_gmean_val, 5),
             "roc_auc_test":   round(roc_auc_score(y_test, y_proba), 5),
             "pr_auc_test":    round(average_precision_score(y_test, y_proba), 5),
             "mcc_test":       round(matthews_corrcoef(y_test, y_pred), 5),
+            "brier_score":    round(brier_score_loss(y_test, y_proba), 5),
             "fbeta_test":     round(_fbeta(y_test, y_pred, beta=2, zero_division=0), 5),
             "f1_test":        round(f1_score(y_test, y_pred, zero_division=0), 5),
             "precision_test": round(precision_score(y_test, y_pred, zero_division=0), 5),
@@ -701,6 +716,61 @@ def plot_cv_comparison(cv_results: pd.DataFrame) -> None:
     logger.info("CV comparison → %s", out)
 
 
+def plot_calibration_diagram(
+    fitted_models: dict[str, Any],
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+) -> None:
+    """
+    Diagramme de fiabilité (reliability diagram) pour évaluer la calibration
+    des probabilités de chaque modèle.
+
+    Un modèle parfaitement calibré suit la diagonale : quand il dit p=0.6,
+    60% des échantillons sont effectivement positifs.
+    """
+    from sklearn.calibration import calibration_curve
+
+    n = len(fitted_models)
+    fig, axes = plt.subplots(1, min(n, 3), figsize=(6 * min(n, 3), 5))
+    if n == 1:
+        axes = [axes]
+    fig.suptitle("Diagramme de fiabilité — Calibration des probabilités",
+                 fontsize=13, fontweight="bold")
+    palette = PLOT["palette"]
+
+    for ax, ((key, model), color) in zip(axes, zip(fitted_models.items(), palette)):
+        y_proba = model.predict_proba(X_test)[:, 1]
+
+        prob_true, prob_pred = calibration_curve(y_test, y_proba, n_bins=10, strategy="uniform")
+
+        ax.plot(prob_pred, prob_true, "o-", color=color, lw=2, label=key.upper())
+        ax.plot([0, 1], [0, 1], "k--", lw=1, label="Calibration parfaite")
+        ax.fill_between(prob_pred, prob_true, prob_pred, alpha=0.15, color=color)
+
+        ax.set_xlabel("Probabilité prédite", fontsize=10)
+        ax.set_ylabel("Proportion réelle", fontsize=10)
+        ax.set_title(f"{key.upper()}", fontsize=11, fontweight="bold")
+        ax.legend(fontsize=9)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_aspect("equal")
+        ax.grid(alpha=0.3)
+
+        from sklearn.metrics import brier_score_loss
+        brier = brier_score_loss(y_test, y_proba)
+        ax.text(0.05, 0.92, f"Brier: {brier:.4f}", transform=ax.transAxes,
+                fontsize=9, color=color, fontweight="bold")
+
+    for ax in axes[len(fitted_models):]:
+        ax.set_visible(False)
+
+    plt.tight_layout()
+    out = PATHS["figures_eval"] / "calibration_diagram.png"
+    fig.savefig(out, dpi=PLOT["dpi"], bbox_inches="tight")
+    plt.close(fig)
+    logger.info("Calibration diagram → %s", out)
+
+
 # ===========================================================================
 # 7. RAPPORT SYNTHÈSE
 # ===========================================================================
@@ -895,6 +965,7 @@ def main(
     plot_confusion_matrices(fitted_models, X_test, y_test, thresholds=thresholds)
     plot_feature_importance(fitted_models, FEATURES)
     plot_cv_comparison(cv_results)
+    plot_calibration_diagram(fitted_models, X_test, y_test)
 
     # 8. Rapport synthèse
     write_summary_report(cv_results, eval_report, bp_path)

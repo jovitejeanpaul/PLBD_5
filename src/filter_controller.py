@@ -53,10 +53,10 @@ except ImportError:
 # ── Configuration des filtres ─────────────────────────────────────────────────
 FILTER_CONFIG: dict[int, dict] = {
     1: {
-        "pin":    23,
-        "name":   "Filtre à sédiments",
-        "desc":   "Retient particules, sable, matières en suspension",
-        "color":  "#2E86AB",
+        "pin":    25,
+        "name":   "Filtre à charbon actif",
+        "desc":   "Adsorption chlore, pesticides, composés organiques, goût/odeur",
+        "color":  "#02C39A",
     },
     2: {
         "pin":    24,
@@ -65,10 +65,10 @@ FILTER_CONFIG: dict[int, dict] = {
         "color":  "#1C7293",
     },
     3: {
-        "pin":    25,
-        "name":   "Filtre à charbon actif",
-        "desc":   "Adsorption chlore, pesticides, composés organiques, goût/odeur",
-        "color":  "#02C39A",
+        "pin":    23,
+        "name":   "Filtre à sédiments",
+        "desc":   "Retient particules, sable, matières en suspension",
+        "color":  "#2E86AB",
     },
 }
 
@@ -363,17 +363,17 @@ class FilterController:
                 potability=potability,
             )
 
-        # ── P1 : Turbidité haute → Sédiments ────────────────────────────
+        # ── P1 : Turbidité haute → Sédiments (pompe 3, PIN 23) ──────────
         if turbidity > THRESHOLDS["turbidity_high"]:
-            filter_id = 1
+            filter_id = 3
             reason = f"Turbidité élevée ({turbidity:.1f} NTU > seuil NM {THRESHOLDS['turbidity_high']:.0f} NTU)"
 
-        # ── P2 : pH hors norme ou contexte chimique → Charbon actif ─────
+        # ── P2 : pH hors norme ou contexte chimique → Charbon actif (pompe 1, PIN 25)
         elif (not (THRESHOLDS["ph_min"] <= ph <= THRESHOLDS["ph_max"])
               or eau_chloree or zone_agricole or historique_odeur
               or source.lower() in ["réseau", "reseau", "rivière", "riviere", "fleuve"]):
 
-            filter_id = 3
+            filter_id = 1
             raisons = []
             if not (THRESHOLDS["ph_min"] <= ph <= THRESHOLDS["ph_max"]):
                 raisons.append(f"pH hors norme ({ph:.2f})")
@@ -387,14 +387,14 @@ class FilterController:
                 raisons.append(f"source '{source}'")
             reason = "Risque chimique/organique : " + ", ".join(raisons)
 
-        # ── P3 : Turbidité modérée → Charbon compressé ──────────────────
+        # ── P3 : Turbidité modérée → Charbon compressé (pompe 2, PIN 24)
         elif turbidity > THRESHOLDS["turbidity_moderate"]:
             filter_id = 2
             reason = f"Turbidité modérée ({turbidity:.1f} NTU) — micro-filtration fine recommandée"
 
-        # ── P4 : Non potable sans règle P1–P3 → Charbon actif (défaut) ──
+        # ── P4 : Non potable sans règle P1–P3 → Charbon actif (pompe 1, PIN 25)
         else:
-            filter_id = 3
+            filter_id = 1
             reason = "Eau non potable (combinaison de paramètres) — charbon actif par précaution"
 
             # Enrichir avec SHAP si disponible
