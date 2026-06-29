@@ -82,8 +82,16 @@ except ImportError:
     }
     TDS_EC_FACTOR = 0.67
 
-# Nombre d'échantillons pour la moyenne — harmonisé à 5 pour tous les capteurs
-N_SAMPLES = 5
+# ── Paramètres de stabilisation des capteurs ─────────────────────────────
+N_SAMPLES = 5              # nombre de lectures dans la fenêtre de stabilité
+STABILITY_INTERVAL = 0.5   # secondes entre deux lectures
+STABILITY_THRESHOLD = {    # écart-type max pour considérer le capteur stable
+    "ph":           0.05,  # ±0.05 unité pH
+    "Conductivity": 10.0,  # ±10 µS/cm
+    "Turbidity":    0.3,   # ±0.3 NTU
+    "Temperature":  0.2,   # ±0.2 °C
+}
+STABILITY_TIMEOUT = 15.0   # secondes max avant de considérer la lecture comme valide
 
 # ===========================================================================
 # CAPTEUR DS18B20 — TEMPÉRATURE (1-Wire, GPIO 4)
@@ -209,10 +217,14 @@ def voltage_to_turbidity(v: float) -> float:
 
 class ADS1115Reader:
     """
-    Lecture réelle via ADS1115 (I2C) + DS18B20 (1-Wire).
+    Lecture réelle via ADS1115 (I2C) + DS18B20 (1-Wire) avec stabilisation.
 
-    Canaux ADS1115 : A0=TDS · A1=pH · A3=Turbidité
+    Canaux ADS1115 : A1=TDS · A2=pH · A3=Turbidité
     Capteur 1-Wire : DS18B20 → Temperature
+
+    Stabilisation : accumule des lectures toutes les STABILITY_INTERVAL
+    secondes jusqu'à ce que les N_SAMPLES dernières lectures aient un
+    écart-type inférieur au seuil (STABILITY_THRESHOLD), ou timeout.
     """
 
     def __init__(self, gain: int = 1, n_samples: int = N_SAMPLES):
@@ -229,24 +241,90 @@ class ADS1115Reader:
         if _DS18B20_FILE is None:
             raise RuntimeError("DS18B20 non détecté. Vérifiez le câblage sur GPIO 4.")
 
-    def _mean_voltage(self, channel) -> float:
-        readings = [channel.voltage for _ in range(self._n)]
-        time.sleep(0.01)
-        return float(np.mean(readings))
+    def _stable_voltage(self, channel, threshold: float, name: str) -> tuple:
+        """
+        Lit le canal jusqu'à stabilisation ou timeout. Capture les pannes
+        matérielles (I2C déconnecté, bus saturé) sans crasher le pipeline.
+
+        Returns
+        -------
+        tuple (voltage_moyen, is_stable, error_msg | None)
+        """
+        readings = []
+        t0 = time.time()
+
+        while True:
+            try:
+                readings.append(channel.voltage)
+            except Exception as e:
+                logger.error("Erreur lecture capteur %s : %s", name, e)
+                return 0.0, False, f"{name} : échec de lecture I2C ({e})"
+
+            if len(readings) >= self._n:
+                window = readings[-self._n:]
+                std = float(np.std(window))
+                if std <= threshold:
+                    return float(np.mean(window)), True, None
+
+            if time.time() - t0 > STABILITY_TIMEOUT:
+                window = readings[-self._n:] if len(readings) >= self._n else readings
+                msg = f"{name} : non stabilisé après {STABILITY_TIMEOUT:.0f}s"
+                logger.warning(
+                    "Stabilisation timeout %s (%.1fs, %d lectures, std=%.4f > seuil=%.4f)",
+                    name, STABILITY_TIMEOUT, len(readings),
+                    float(np.std(window)), threshold,
+                )
+                return float(np.mean(window)), False, msg
+
+            time.sleep(STABILITY_INTERVAL)
 
     def read_features(self) -> dict[str, float]:
-        """Retourne les 5 mesures : 4 features diagnostic + température prédiction."""
-        v_tds  = self._mean_voltage(self._ch_tds)
-        v_ph   = self._mean_voltage(self._ch_ph)
-        v_turb = self._mean_voltage(self._ch_turb)
-        temp   = read_temperature_mean(_DS18B20_FILE, self._n)
-        ec     = voltage_to_conductivity(v_tds)
+        """
+        Lit les capteurs en attendant la stabilisation de chacun.
+
+        Retourne les 5 mesures + la liste des erreurs/instabilités
+        sous la clé ``_sensor_errors`` (capteur déconnecté, timeout,
+        échec de lecture I2C ou 1-Wire).
+        """
+        errors: list[str] = []
+
+        v_tds, tds_stable, err = self._stable_voltage(
+            self._ch_tds, STABILITY_THRESHOLD.get("Conductivity", 10.0) / 100, "TDS"
+        )
+        if err:
+            errors.append(err)
+
+        v_ph, ph_stable, err = self._stable_voltage(
+            self._ch_ph, STABILITY_THRESHOLD.get("ph", 0.05) / 3.5, "pH"
+        )
+        if err:
+            errors.append(err)
+
+        v_turb, turb_stable, err = self._stable_voltage(
+            self._ch_turb, STABILITY_THRESHOLD.get("Turbidity", 0.3) / 100, "Turbidité"
+        )
+        if err:
+            errors.append(err)
+
+        try:
+            temp = read_temperature_mean(_DS18B20_FILE, self._n)
+        except Exception as e:
+            logger.error("Erreur lecture DS18B20 : %s", e)
+            temp = 0.0
+            errors.append(f"Temperature : échec de lecture 1-Wire ({e})")
+
+        ec = voltage_to_conductivity(v_tds)
+
+        if not errors and tds_stable and ph_stable and turb_stable:
+            logger.info("Capteurs stabilisés — lecture fiable")
+
         return {
             "ph":           voltage_to_ph(v_ph, temperature=temp),
             "Solids":       conductivity_to_tds(ec),
             "Conductivity": ec,
             "Turbidity":    voltage_to_turbidity(v_turb),
             "Temperature":  temp,
+            "_sensor_errors": errors,
         }
 
 
@@ -371,6 +449,9 @@ class SensorPipeline:
         t0  = time.perf_counter()
         raw = self.reader.read_features()
 
+        # Erreurs matérielles remontées par le reader (échec I2C/1-Wire, timeout stabilisation)
+        sensor_errors = list(raw.pop("_sensor_errors", []))
+
         # Vérification des bornes sur toutes les mesures (y compris température)
         all_bounds = {**PHYSICAL_BOUNDS}
         out_of_bounds = [
@@ -381,17 +462,20 @@ class SensorPipeline:
         if out_of_bounds:
             logger.warning("Valeurs hors bornes : %s", out_of_bounds)
 
-        # Détection capteur invalide (déconnecté ou saturé)
-        SATURATION_VALUES = {"Turbidity": 4550.0, "Conductivity": 0.0, "Solids": 0.0}
-        sensor_errors = []
-        for f in FEATURES:
-            v = raw.get(f, 0.0)
-            if v == 0.0 and f != "ph":
-                sensor_errors.append(f"{f} = 0 (capteur déconnecté ?)")
-            elif f in SATURATION_VALUES and v >= SATURATION_VALUES[f] and SATURATION_VALUES[f] > 0:
-                sensor_errors.append(f"{f} = {v} (capteur saturé / hors eau ?)")
-        if raw.get("Temperature", 0.0) == 0.0:
-            sensor_errors.append("Temperature = 0 (capteur déconnecté ?)")
+        # Détection capteur déconnecté : seuls Conductivity/Solids dérivent
+        # d'une formule qui vaut exactement 0 si et seulement si la tension
+        # ADS1115 est à 0V (fil flottant). De l'eau réelle a toujours une
+        # conductivité résiduelle non nulle — 0.0 exact est donc un signal
+        # fiable de sonde déconnectée.
+        # pH (jamais 0 par formule), Turbidity (0 NTU = eau la plus claire
+        # possible, valeur légitime) et Temperature (0°C physiquement valide)
+        # sont exclus de cette vérification.
+        for f in ("Conductivity", "Solids"):
+            if raw.get(f, 0.0) == 0.0:
+                sensor_errors.append(f"{f} = 0 (capteur TDS déconnecté ?)")
+
+        if raw.get("Turbidity", 0.0) >= 4550.0:
+            sensor_errors.append("Turbidity = 4550 NTU (capteur hors eau ou déconnecté ?)")
 
         # Inférence diagnostic — température exclue (réservée au modèle de prédiction)
         x        = np.array([[raw[f] for f in FEATURES]])
