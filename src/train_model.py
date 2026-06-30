@@ -481,12 +481,17 @@ def save_models(
     eval_report : pd.DataFrame
         Utilisé pour déterminer le rang de chaque modèle.
     """
+    # Nettoyer les anciens fichiers model_*.joblib avant d'écrire les nouveaux
+    for old in PATHS["models"].glob("model_*.joblib"):
+        old.unlink()
+        logger.info("Ancien modèle supprimé : %s", old.name)
+
     # Scaler
     scaler_path = PATHS["models"] / "scaler.joblib"
     joblib.dump(scaler, scaler_path)
     logger.info("Scaler sauvegardé → %s", scaler_path)
 
-    # Modèles classés par ROC-AUC test
+    # Modèles classés par score composite
     ranked_keys = eval_report["model_key"].tolist()
 
     for rank, key in enumerate(ranked_keys, 1):
