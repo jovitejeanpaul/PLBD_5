@@ -59,13 +59,13 @@ FILTER_CONFIG: dict[int, dict] = {
         "color":  "#02C39A",
     },
     2: {
-        "pin":    24,
+        "pin":    23,
         "name":   "Filtre à charbon compressé",
         "desc":   "Micro-filtration fine, certains métaux lourds, kystes parasitaires",
         "color":  "#1C7293",
     },
     3: {
-        "pin":    23,
+        "pin":    24,
         "name":   "Filtre à sédiments",
         "desc":   "Retient particules, sable, matières en suspension",
         "color":  "#2E86AB",

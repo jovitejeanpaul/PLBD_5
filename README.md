@@ -62,9 +62,9 @@ AQUA-SENS est un systeme concu pour les contextes a ressources limitees (zones r
 
 | Pompe | Filtre | Usage | GPIO |
 |---|---|---|---|
-| 1 | Sediments | Particules en suspension, sable | PIN 23 |
-| 2 | Charbon compresse | Micro-particules fines, metaux lourds | PIN 24 |
-| 3 | Charbon actif | Chlore, pesticides, composes organiques | PIN 25 |
+| 1 | Charbon actif | Chlore, pesticides, composes organiques | PIN 25 |
+| 2 | Charbon compresse | Micro-particules fines, metaux lourds | PIN 23 |
+| 3 | Sediments | Particules en suspension, sable | PIN 24 |
 
 ---
 
